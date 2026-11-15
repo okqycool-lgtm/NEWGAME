@@ -38,7 +38,7 @@ export class Player {
       wall: null, wallT: 0, wallCd: 0, awayT: 0,
       peakY: 34, blockedT: 0, ghosts: new Set(), cp: checkpoints[0],
       phase: 0, firstLanding: true, frontLimit: Infinity, vanSpeed: VAN.speed,
-      vault: null, ledge: null, djT: 9, landT: 9, landKind: '', steer: 0, glassBroken: false,
+      vault: null, ledge: null, ground: null, djT: 9, landT: 9, landKind: '', steer: 0, glassBroken: false,
     });
   }
 
@@ -75,6 +75,11 @@ export class Player {
     return true;
   }
 
+  onSlope() {
+    const g = this.ground;
+    return this.grounded && !!g && g.kind === 'ramp' && g.yB < g.yA && this.d < g.d1 - 0.3;
+  }
+
   findVault() {
     let best = null, bestGap = Infinity;
     for (const c of colliders) {
@@ -99,7 +104,7 @@ export class Player {
     this.djT += dt; this.landT += dt;
 
     switch (this.state) {
-      case 'done': return;
+      case 'done': case 'busted': return;
       case 'ready': return this.stepReady(dt);
       case 'kick': return this.stepKick(dt);
       case 'ledge': return this.stepLedge(dt);
@@ -191,7 +196,9 @@ export class Player {
       this.setState('slide');
       this.emit('slide');
     } else if (this.state === 'slide') {
-      if (this.stateT > 0.5 && (!inp.slideHeld || this.stateT > 1.3) && this.canStand()) this.setState('run');
+      // on a downhill slope the slide carries all the way to the bottom
+      if (this.onSlope()) this.boostT = Math.max(this.boostT, 1.2);
+      else if (this.stateT > 0.5 && (!inp.slideHeld || this.stateT > 1.3) && this.canStand()) this.setState('run');
     } else if (this.state === 'roll') {
       if (this.stateT > 0.5 && this.canStand()) this.setState('run');
     }
@@ -250,9 +257,11 @@ export class Player {
     let target = BASE_SPEED * speedMult(this.d, this.y);
     if (this.boostT > 0) target *= 1.15;
     if (this.state === 'wallrun') target = Math.max(target, BASE_SPEED * 1.12);
+    if (this.state === 'slide' && this.onSlope()) target = BASE_SPEED * 1.4;      // gravity does the work
     if (this.slowT > 0) target *= 0.5;
     if (this.hardT > 0) target *= 0.6;
-    this.speed += clamp(target - this.speed, -40 * dt, 26 * dt);
+    // momentum carries through the air: launching off a slope keeps its speed
+    this.speed += clamp(target - this.speed, (this.grounded ? -40 : -4) * dt, 26 * dt);
 
     const pd = this.d;
     this.d += this.speed * dt;
@@ -299,10 +308,10 @@ export class Player {
     if (this.grounded) {
       const g = this.groundUnder(this.x, this.d, this.y + STEP_UP);
       if (g && g.top >= this.y - 0.55) {
-        this.y = g.top;
+        this.y = g.top; this.ground = g.c;
         if (g.c.kind === 'bounce') this.bounce(g.c);
       } else {
-        this.grounded = false; this.coyote = 0.11; this.vy = 0; this.peakY = this.y;
+        this.grounded = false; this.coyote = 0.11; this.vy = 0; this.peakY = this.y; this.ground = null;
         if (this.state === 'run') this.setState('air');
       }
       return;
@@ -319,7 +328,7 @@ export class Player {
 
   land(g) {
     const fall = this.peakY - g.top;
-    this.y = g.top; this.vy = 0; this.grounded = true; this.usedDouble = false;
+    this.y = g.top; this.vy = 0; this.grounded = true; this.usedDouble = false; this.ground = g.c;
     this.landT = 0; this.kickT = 0;
     if (g.c.kind === 'bounce') return this.bounce(g.c);
     const first = this.firstLanding;

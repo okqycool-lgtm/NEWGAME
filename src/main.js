@@ -6,6 +6,7 @@ import { buildWorld } from './world.js';
 import { Fx, makeBundleMesh } from './fx.js';
 import { Sfx } from './audio.js';
 import { Input } from './input.js';
+import { Cop } from './cop.js';
 import * as L from './level.js';
 
 const $ = (id) => document.getElementById(id);
@@ -38,6 +39,7 @@ scene.add(runner.root);
 const fx = new Fx(scene);
 const sfx = new Sfx();
 const input = new Input();
+const cop = new Cop(scene);
 const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.55, 16),
   new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.45, depthWrite: false }));
 shadow.rotation.x = -Math.PI / 2;
@@ -55,7 +57,7 @@ const store = {
 const game = {
   state: 'ready', first: true, manual: false, clock: 0, timeScale: 0.12, acc: 0,
   cash: L.START_CASH, time: 0, vanD: L.VAN.startD, vanGo: false, vanSpeed: 0,
-  bundles: [], finishT: 0, resultsShown: false, shake: 0, camBlend: 1,
+  bundles: [], finishT: 0, resultsShown: false, shake: 0, camBlend: 1, chaseT: 0,
   stats: { dropped: 0, recovered: 0, lost: 0, falls: 0 }, lastStep: 0, result: null,
 };
 const cam = { x: 0, y: 34, off: 0, roll: 0, fov: 62, pos: new THREE.Vector3(0, 38, 20), look: new THREE.Vector3() };
@@ -65,12 +67,14 @@ function resetRun(retry) {
   player.events.length = 0;
   Object.assign(game, {
     state: 'ready', first: !retry, cash: L.START_CASH, time: 0, vanD: L.VAN.startD, vanGo: false, vanSpeed: 0,
-    finishT: 0, resultsShown: false, shake: 0, camBlend: 1, acc: 0, result: null,
+    finishT: 0, resultsShown: false, shake: 0, camBlend: 1, acc: 0, result: null, chaseT: 0,
     stats: { dropped: 0, recovered: 0, lost: 0, falls: 0 },
   });
   game.bundles.length = 0;
   bundleMeshes.forEach((m) => { m.visible = false; });
   fx.reset();
+  cop.reset();
+  $('chase').classList.remove('show');
   world.glassPane.visible = true;
   world.van.position.set(L.VAN.x, 0, -L.VAN.startD);
   cam.x = 0; cam.y = player.y; cam.off = 0;
@@ -102,6 +106,7 @@ const PROMPTS = {
   wallrun: ['<b>JUMP</b> on the yellow <b>KICK</b> panel', '<b>JUMP</b> on the yellow <b>KICK</b> panel'],
   roll: ['Long drop — tap <b>S</b> just before landing to <b>ROLL</b>', 'Long drop — tap <b>SLIDE</b> just before landing to <b>ROLL</b>'],
   gap: ['<b>JUMP!</b>', '<b>JUMP!</b>'],
+  slope: ['<b>SLIDE</b> the slope — hold <b>S</b> to ride it down fast', '<b>SLIDE</b> the slope — hold <b>SLIDE</b> to ride it down fast'],
   van: ['<b>JUMP</b> into the van!', '<b>JUMP</b> into the van!'],
   ready: ['Press <b>SPACE</b> — kick through the glass', 'Tap <b>JUMP</b> — kick through the glass'],
 };
@@ -112,6 +117,7 @@ function currentPrompt() {
   for (const z of L.prompts) {
     if (player.d < z.d0 || player.d > z.d1) continue;
     if (z.x1 !== undefined && player.x > z.x1) continue;
+    if (z.x0 !== undefined && player.x < z.x0) continue;
     if (z.yMin !== undefined && player.y < z.yMin) continue;
     return z.key;
   }
@@ -128,8 +134,11 @@ function updateHud() {
     if (html) $('prompt').innerHTML = html;
     $('prompt').classList.toggle('show', !!html);
   }
-  const prog = Math.round(Math.max(0, Math.min(1, player.d / 700)) * 200) / 2;
+  const prog = Math.round(Math.max(0, Math.min(1, player.d / (700 + L.S))) * 200) / 2;
   if (prog !== hud.prog) { hud.prog = prog; $('progfill').style.width = prog + '%'; }
+  const chasing = game.chaseT > 0 && game.state === 'play';
+  $('chase').classList.toggle('show', chasing);
+  if (chasing) $('chasefill').style.width = (game.chaseT / L.CHASE_TIME) * 100 + '%';
 }
 
 // ---------------------------------------------------------------- cash bundles
@@ -201,6 +210,8 @@ function handleEvents() {
         else sfx.play('land');
         break;
       case 'clip':
+        if (game.chaseT > 0) { busted(); player.events.length = 0; return; }   // tripped with the officer on your tail
+        game.chaseT = L.CHASE_TIME; sfx.play('siren');
         sfx.play('clip'); game.shake = 0.45;
         fx.burst(runner.packPos(tmp), 10, player.speed);
         if (game.cash >= L.BUNDLE) {
@@ -239,12 +250,23 @@ function finish() {
   sfx.play('finish');
   fx.burst(runner.packPos(tmp), 30, 4);
 }
+function busted() {
+  game.state = 'busted'; game.finishT = 0; game.shake = 0.6;
+  player.setState('busted'); player.speed = 0;
+  game.bundles.forEach((b) => { if (b.alive) { b.alive = false; b.mesh.visible = false; } });
+  // a busted run delivers nothing and never touches the personal bests
+  game.result = { busted: true, cash: 0, time: game.time, newCash: false, newTime: false, bestCash: store.get('bestCash'), bestTime: store.get('bestTime') };
+  sfx.play('busted');
+  $('flash').classList.add('on'); requestAnimationFrame(() => $('flash').classList.remove('on'));
+}
 function showResults() {
   const r = game.result;
   game.resultsShown = true;
-  $('res-head').textContent = r.cash >= L.START_CASH ? 'PERFECT GETAWAY' : r.cash > 0 ? 'CLEAN GETAWAY' : 'EMPTY-HANDED';
-  $('res-cash').textContent = money(r.cash); $('res-time').textContent = clock(r.time);
-  $('res-bestcash').textContent = money(r.bestCash); $('res-besttime').textContent = clock(r.bestTime);
+  $('results').classList.toggle('busted', !!r.busted);
+  $('res-cashlbl').textContent = r.busted ? 'CASH SEIZED' : 'CASH DELIVERED';
+  $('res-head').textContent = r.busted ? 'BUSTED' : r.cash >= L.START_CASH ? 'PERFECT GETAWAY' : r.cash > 0 ? 'CLEAN GETAWAY' : 'EMPTY-HANDED';
+  $('res-cash').textContent = money(r.busted ? game.cash : r.cash); $('res-time').textContent = clock(r.time);
+  $('res-bestcash').textContent = r.bestCash === null ? '—' : money(r.bestCash); $('res-besttime').textContent = r.bestTime === null ? '—' : clock(r.bestTime);
   $('st-cash').classList.toggle('new', r.newCash); $('st-time').classList.toggle('new', r.newTime);
   $('results').classList.remove('hidden');
   showBests();
@@ -261,6 +283,12 @@ function tick(dt, inp) {
     if (!game.resultsShown && game.finishT > 1.2) showResults();
     return;
   }
+  if (game.state === 'busted') {
+    game.finishT += dt;
+    if (!game.resultsShown && game.finishT > 1.3) showResults();
+    return;
+  }
+  if (game.chaseT > 0 && game.state === 'play') game.chaseT = Math.max(0, game.chaseT - dt);
   player.frontLimit = game.vanD - 0.1;
   player.vanSpeed = game.vanSpeed;
   player.step(dt, inp);
@@ -284,7 +312,7 @@ function advance(rdt) {
   game.timeScale = target < game.timeScale ? target : game.timeScale + (target - game.timeScale) * Math.min(1, 5 * rdt);
   game.acc += rdt * game.timeScale;
   const inp = input.consume();
-  if (game.state === 'finish' && game.resultsShown && game.finishT > 2 && inp.jump) { resetRun(true); return; }
+  if ((game.state === 'finish' || game.state === 'busted') && game.resultsShown && game.finishT > 2 && inp.jump) { resetRun(true); return; }
   let n = 0;
   while (game.acc >= FIXED && n < 14) {
     tick(FIXED, n === 0 ? inp : { ...inp, jump: false, slide: false });
@@ -338,6 +366,7 @@ function present(rdt) {
   if (game.state !== 'finish' && player.state !== 'done') fx.trail(sdt, runner.packPos(tmp), player.speed);
   fx.update(sdt, game.clock);
   world.update(game.clock, player.d);
+  cop.update(rdt, game.clock, player, game.state === 'play' ? game.chaseT : 0, game.state === 'busted');
   world.van.position.z = -game.vanD;
 
   const g = player.groundUnder(player.x, player.d, player.y + 0.5);
@@ -371,7 +400,7 @@ function frame(now) {
 // ---------------------------------------------------------------- wiring
 input.onAny = () => sfx.unlock();
 input.onRetry = (code) => {
-  if (game.state === 'finish' ? game.resultsShown : code === 'KeyR' && game.state === 'play') resetRun(true);
+  if (game.state === 'finish' || game.state === 'busted' ? game.resultsShown : code === 'KeyR' && game.state === 'play') resetRun(true);
 };
 input.onMute = () => { sfx.setMuted(!sfx.muted); $('mute').classList.toggle('off', sfx.muted); };
 input.bindTouch({ root: $('touch'), steer: $('steer'), knob: $('knob'), jump: $('btn-jump'), slide: $('btn-slide') });
@@ -386,4 +415,4 @@ showBests();
 requestAnimationFrame(frame);
 
 // Debug / automated playtest hook.
-window.__ch = { game, player, input, runner, level: L, tick, resetRun, store, camera };
+window.__ch = { game, player, input, runner, cop, level: L, tick, resetRun, store, camera };

@@ -9,12 +9,11 @@ await page.goto(process.env.URL || 'http://localhost:5173/');
 await page.waitForFunction(() => window.__ch);
 await page.addScriptTag({ content: bot });
 const want = (process.argv[2] || '').split(',').filter(Boolean);
-const spots = [['r1', 'market', 22], ['vault', 'market', 45.5], ['slide', 'market', 117.6], ['gap', 'market', 153], ['split', 'market', 190], ['split2', 'market', 232],
-  ['ramp', 'market', 250], ['market', 'market', 292], ['market2', 'market', 372], ['wallrun', 'roof', 266], ['kick', 'roof', 284], ['roof4', 'roof', 310], ['drop', 'roof', 424],
-  ['final', 'market', 480], ['f2', 'market', 585], ['road', 'market', 660], ['van', 'market', 9999]];
-for (const [name, route, stopD] of spots) {
+const spots = [['r1', 'market', 30], ['r2', 'market', 90], ['split2', 'market', 232], ['climb', 'market', 572], ['shanty', 'market', 584], ['slope', 'market', 622], ['slope2', 'market', 706],
+  ['n2', 'market', 662], ['f2', 'market', 745], ['road', 'market', 824], ['cop', 'market', 52, { vaultAC: false }], ['bust', 'market', 9999, { vaultAC: false, noSlide: true }]];
+for (const [name, route, stopD, extra] of spots) {
   if (want.length && !want.includes(name)) continue;
-  await page.evaluate(([route, stopD]) => { window.runBot({ route, stopD, retry: true }); __ch.game.camBlend = 1; }, [route, stopD]);
+  await page.evaluate(([route, stopD, extra]) => { window.runBot({ route, stopD, retry: true, ...extra }); __ch.game.camBlend = 1; __ch.game.manual = name0(extra); function name0(e) { return !(e && e.noSlide); } }, [route, stopD, extra || null]);
   await page.waitForTimeout(2500);
   await page.screenshot({ path: `tests/shots/${name}.png` });
   console.log(name);

@@ -71,6 +71,8 @@ export class Sfx {
       case 'recover': [660, 880, 1320].forEach((f, i) => this.tone(f, f, 0.12, 'square', 0.1, i * 0.07)); break;
       case 'lost': this.tone(300, 120, 0.35, 'triangle', 0.14); break;
       case 'fall': this.tone(500, 60, 0.6, 'sawtooth', 0.16); break;
+      case 'siren': for (let i = 0; i < 4; i++) this.tone(i % 2 ? 620 : 880, i % 2 ? 620 : 880, 0.16, 'square', 0.08, i * 0.16); break;
+      case 'busted': this.tone(400, 70, 0.7, 'sawtooth', 0.22); this.noise(0.3, 0.3, 300, 'lowpass'); for (let i = 0; i < 6; i++) this.tone(i % 2 ? 620 : 880, i % 2 ? 620 : 880, 0.14, 'square', 0.07, 0.2 + i * 0.14); break;
       case 'finish': [392, 523, 659, 784, 1047].forEach((f, i) => this.tone(f, f, 0.22, 'square', 0.11, i * 0.09)); break;
     }
   }

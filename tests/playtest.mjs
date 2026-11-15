@@ -51,6 +51,23 @@ r = await run({ route: 'market', jumpGap1: false, retry: true, maxT: 30 });
 const falls = r.notable.filter((e) => e.type === 'fall');
 check('fall respawns at checkpoint with one $5,000 penalty per fall', falls.length >= 1 && r.cashLog.length === falls.length && r.cashLog[0].cash === 45000, `${falls.length} falls, cash ${r.cash}, respawn d≈${r.cashLog[0]?.d}`);
 
+r = await run({ route: 'market', retry: true });
+check('slope slide rides to the bottom with extra speed', r.maxSlideSpeed > 15 && r.state === 'finish', `peak slide speed ${r.maxSlideSpeed} m/s (run speed 11.5)`);
+if (verbose) console.log(JSON.stringify(r.notable));
+
+// robot officer: one stumble starts an 8 s chase; a second stumble inside it ends the run
+r = await run({ route: 'market', vaultAC: false, chase: true, retry: true, stopD: 60 });
+check('a stumble puts the officer on your tail for ~8 s', r.chaseT > 6 && r.chaseT < 8, `chase left ${r.chaseT}s at d=60`);
+r = await run({ route: 'market', vaultAC: false, chase: true, retry: true });
+check('surviving the chase lets the run finish', r.state === 'finish' && r.chaseT === 0 && r.cash === 50000);
+const bestBefore = await page.evaluate(() => [localStorage.getItem('cyberheist.bestCash'), localStorage.getItem('cyberheist.bestTime')].join());
+r = await run({ route: 'market', vaultAC: false, noSlide: true, chase: true, retry: true });
+const bestAfter = await page.evaluate(() => [localStorage.getItem('cyberheist.bestCash'), localStorage.getItem('cyberheist.bestTime')].join());
+const bustUi = await page.evaluate(() => ({ head: document.getElementById('res-head').textContent, shown: !document.getElementById('results').classList.contains('hidden') }));
+check('second stumble during the chase = busted, bests untouched', r.state === 'busted' && r.result.busted && bustUi.head === 'BUSTED' && bustUi.shown && bestBefore === bestAfter, `busted at d=${r.d}, t=${r.time}s`);
+r = await run({ route: 'market', retry: true, stopD: 30 });
+check('retry after a bust starts a clean run', r.state === 'play' && r.cash === 50000 && r.chaseT === 0);
+
 // personal bests survive a refresh
 const before = await page.evaluate(() => ({ c: localStorage.getItem('cyberheist.bestCash'), t: localStorage.getItem('cyberheist.bestTime') }));
 await page.reload();

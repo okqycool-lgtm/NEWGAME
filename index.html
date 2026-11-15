@@ -37,7 +37,7 @@
   #mute.off { opacity: .45; text-decoration: line-through; }
   #progress { position: absolute; left: 0; right: 0; top: 0; height: 4px; background: rgba(255,255,255,.08); }
   #progfill { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--pink), var(--cyan)); }
-  #prompt { position: absolute; left: 50%; top: 21%; transform: translateX(-50%) skewX(-9deg); max-width: min(92vw, 620px); text-align: center;
+  #prompt { position: absolute; left: 50%; top: 24%; transform: translateX(-50%) skewX(-9deg); max-width: min(92vw, 620px); text-align: center;
     background: rgba(13,8,32,.8); border: 2px solid var(--accent); color: #fff; padding: 9px 18px; font-size: clamp(13px, 3.4vw, 19px);
     letter-spacing: .04em; opacity: 0; transition: opacity .18s; text-transform: uppercase; line-height: 1.25; }
   #prompt.show { opacity: 1; }
@@ -46,6 +46,14 @@
     letter-spacing: .05em; text-shadow: 0 2px 0 #000, 0 0 18px currentColor; opacity: 0; white-space: nowrap; font-style: italic; }
   #toast.show { animation: toast 1.6s ease-out forwards; }
   #toast.loss { color: #ff5247; } #toast.gain { color: var(--cash); } #toast.trick { color: var(--accent); font-size: clamp(14px, 3.6vw, 22px); top: 44%; }
+  #chase { position: absolute; left: 50%; top: max(64px, calc(env(safe-area-inset-top) + 64px)); transform: translateX(-50%) skewX(-9deg); width: min(88vw, 420px);
+    background: rgba(40,4,10,.85); border: 2px solid #ff2030; padding: 5px 10px 9px; text-align: center; font-size: clamp(10px, 2.7vw, 13px); letter-spacing: .1em;
+    color: #ffd7da; opacity: 0; transition: opacity .2s; overflow: hidden; }
+  #chase.show { opacity: 1; animation: cop .5s steps(2) infinite; }
+  #chasefill { position: absolute; left: 0; bottom: 0; height: 4px; width: 100%; background: linear-gradient(90deg, #ff2030, #2f6bff); }
+  @keyframes cop { 50% { border-color: #2f6bff; } }
+  #results.busted h2 { color: #ff2030; text-shadow: 3px 3px 0 #2f6bff; }
+  #results.busted .stat.cash .val { color: #ff5247; text-decoration: line-through; }
   #flash { position: absolute; inset: 0; background: #ff2030; opacity: 0; pointer-events: none; transition: opacity .5s; }
   #flash.on { opacity: .55; transition: none; }
 
@@ -112,6 +120,7 @@
     <div id="cashbox" class="chip"><span class="lbl">CASH</span><span id="cash">$50,000</span><span id="delta"></span></div>
     <div id="timebox" class="chip"><span class="lbl">TIME</span><span id="time">0:00.0</span></div>
     <button id="mute" aria-label="Toggle sound">♪</button>
+    <div id="chase"><span>⚠ OFFICER ON YOUR TAIL — DON'T TRIP</span><i id="chasefill"></i></div>
     <div id="prompt"></div>
     <div id="toast"></div>
   </div>
@@ -138,7 +147,7 @@
     <h2 id="res-head">CLEAN GETAWAY</h2>
     <div class="tag">GLASS DISTRICT</div>
     <div class="stats">
-      <div class="stat cash" id="st-cash"><span class="lbl">CASH DELIVERED</span><span class="val" id="res-cash">$0</span></div>
+      <div class="stat cash" id="st-cash"><span class="lbl" id="res-cashlbl">CASH DELIVERED</span><span class="val" id="res-cash">$0</span></div>
       <div class="stat time" id="st-time"><span class="lbl">TIME</span><span class="val" id="res-time">0:00.0</span></div>
       <div class="stat best cash"><span class="lbl">BEST CASH</span><span class="val" id="res-bestcash">—</span></div>
       <div class="stat best time"><span class="lbl">BEST TIME</span><span class="val" id="res-besttime">—</span></div>

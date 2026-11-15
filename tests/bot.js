@@ -21,9 +21,10 @@ window.runBot = function (opts) {
       if (d < 212) return 2; if (d < 292) return 4; if (d < 306) return 0; if (d < 320) return 7; if (d < 334) return 4; if (d < 350) return 10.5;
       if (d < 402) return 4; if (d < 417) return 1; if (d < 432) return 8;
     }
-    if (d < 530) return 0; if (d < 548) return 3; if (d < 580) return 0; if (d < 600) return -3; return 0;
+    if (d < 530) return 0; if (d < 548) return 3; if (d < 596) return 2; if (d < 606) return -3; if (d < 676) return 0; if (d < 686) return 2; if (d < 744) return 0; if (d < 764) return -3; return 0;
   };
-  while (t < o.maxT && game.state !== 'finish' && !(o.stopD && p.d >= o.stopD)) {
+  let maxSpeed = 0;
+  while (t < o.maxT && game.state !== 'finish' && game.state !== 'busted' && !(o.stopD && p.d >= o.stopD)) {
     const inp = { steer: 0, jump: false, slide: false, slideHeld: false };
     if (game.state === 'ready') { if (!o.retry && t > 0.05) inp.jump = true; }
     else if (game.state === 'play') {
@@ -34,9 +35,12 @@ window.runBot = function (opts) {
       if (v && v.d0 - d < 2.3 && (o.vaultAC || v.d0 !== 46)) inp.jump = true;
       // shutters
       const sh = L.colliders.find((c) => c.kind === 'over' && c.d0 - d < 3.2 && c.d1 - d > -1 && p.x + 0.4 > c.x0 && p.x - 0.4 < c.x1 && Math.abs(c.base - p.y) < 1);
+      const slope = p.grounded && p.ground && p.ground.kind === 'ramp' && p.ground.yB < p.ground.yA && o.slopes !== false;
+      if (slope) { inp.slideHeld = true; if (p.state === 'run') inp.slide = true; }
+      if (sh && o.noSlide) { /* run straight into it */ } else
       if (sh) { inp.slideHeld = true; if (!heldSlide) inp.slide = true; heldSlide = true; } else heldSlide = false;
       // gaps
-      const gaps = [[148.6, o.jumpGap1], [350.6, o.route === 'roof'], [558.6, true]];
+      const gaps = [[148.6, o.jumpGap1], [350.6, o.route === 'roof'], [644.4, true], [723.4, true]];
       for (const [gd, on] of gaps) if (on && p.grounded && d >= gd && d < gd + 1.2 && p.y > 7) inp.jump = true;
       if (!p.grounded && p.state === 'air' && !p.usedDouble && p.vy < -1 && ((d > 150 && d < 161 && o.jumpGap1) )) inp.jump = true;
       // wall run + kick
@@ -48,16 +52,16 @@ window.runBot = function (opts) {
         if (d > 420 && d < 440 && !p.grounded && p.vy < 0 && p.y - 12 < 1.2) inp.slide = true;
       }
       // van
-      if (d > 650 && p.grounded && game.vanD - d < 2.2) inp.jump = true;
+      if (d > 650 + L.S && p.grounded && game.vanD - d < 2.2) inp.jump = true;
       if (d > 290 && d < 420) minYMid = Math.min(minYMid, p.y);
     }
     tick(1 / 120, inp);
     t += 1 / 120;
     if (game.cash !== lastCash) { cashLog.push({ t: +game.time.toFixed(2), d: +p.d.toFixed(1), cash: game.cash }); lastCash = game.cash; }
-    maxCash = Math.max(maxCash, game.cash);
+    maxCash = Math.max(maxCash, game.cash); if (p.state === 'slide') maxSpeed = Math.max(maxSpeed, p.speed);
   }
   // let the finish settle so results + bests are written
-  if (game.state === 'finish') for (let i = 0; i < 200; i++) tick(1 / 120, { steer: 0, jump: false, slide: false, slideHeld: false });
+  if (game.state === 'finish' || game.state === 'busted') for (let i = 0; i < 200; i++) tick(1 / 120, { steer: 0, jump: false, slide: false, slideHeld: false });
   p.emit = emit0;
   const count = (ty) => log.filter((e) => e.type === ty).length;
   return {
@@ -65,6 +69,6 @@ window.runBot = function (opts) {
     tricks: ['vault', 'wallrun', 'kickoff', 'ledge', 'bounce', 'clip', 'fall', 'djump', 'slide'].map((k) => k + ':' + count(k)).join(' '),
     lands: log.filter((e) => e.type === 'land' && e.kind !== 'soft').map((e) => e.kind + '@' + e.d).join(' '),
     notable: log.filter((e) => ['clip', 'fall', 'bounce', 'ledge', 'wallrun', 'kickoff', 'walloff', 'van'].includes(e.type)),
-    cashLog, result: game.result, resultsShown: game.resultsShown,
+    cashLog, result: game.result, maxSlideSpeed: +maxSpeed.toFixed(1), chaseT: +game.chaseT.toFixed(2), resultsShown: game.resultsShown,
   };
 };

@@ -24,78 +24,81 @@ const pivot = (parent, x, y, z) => { const g = new THREE.Group(); g.position.set
 const POSE_KEYS = ['bodyY', 'pitch', 'roll', 'yaw', 'torso', 'twist', 'head',
   'shLx', 'shLz', 'elL', 'shRx', 'shRz', 'elR', 'hipLx', 'hipLz', 'knL', 'hipRx', 'hipRz', 'knR'];
 
+export const HIP = 0.8;   // hip height of the blocky rig
+
 export class Runner {
   constructor() {
+    // Chunky toy-block proportions: big cube head, slab torso, thick short limbs.
     const root = this.root = new THREE.Group();
     const model = this.model = new THREE.Group();
-    model.scale.setScalar(1.22);
+    model.scale.setScalar(1.16);
     root.add(model);
-    const body = this.body = pivot(model, 0, 0.9, 0);
-    box(body, 0.34, 0.17, 0.21, C.pants, 0, 0, 0);
-    box(body, 0.36, 0.05, 0.22, C.cyan, 0, 0.09, 0, 0.7);          // belt
+    const body = this.body = pivot(model, 0, HIP, 0);
+    box(body, 0.5, 0.16, 0.28, C.pants, 0, 0.02, 0);
+    box(body, 0.52, 0.05, 0.3, C.cyan, 0, 0.11, 0, 0.7);            // belt
 
     // legs
     const leg = (sx) => {
-      const hip = pivot(body, sx * 0.1, -0.03, 0);
-      box(hip, 0.16, 0.44, 0.18, C.pants, 0, -0.21, 0);
-      box(hip, 0.07, 0.15, 0.14, C.pocket, sx * 0.1, -0.24, 0);     // cargo pocket
-      const knee = pivot(hip, 0, -0.42, 0);
-      box(knee, 0.13, 0.4, 0.15, C.pants, 0, -0.2, 0);
-      box(knee, 0.15, 0.11, 0.3, C.boot, 0, -0.42, -0.05);
-      box(knee, 0.07, 0.13, 0.07, C.chrome, 0, -0.38, 0.13, 0.35);  // spring heel
-      box(knee, 0.09, 0.03, 0.09, C.cyan, 0, -0.46, 0.13, 1);
-      const jet = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.5, 6),
+      const hip = pivot(body, sx * 0.125, -0.03, 0);
+      box(hip, 0.23, 0.4, 0.25, C.pants, 0, -0.19, 0);
+      box(hip, 0.07, 0.16, 0.18, C.pocket, sx * 0.14, -0.22, 0);     // cargo pocket
+      const knee = pivot(hip, 0, -0.38, 0);
+      box(knee, 0.22, 0.34, 0.24, C.pants, 0, -0.16, 0);
+      box(knee, 0.24, 0.12, 0.36, C.boot, 0, -0.36, -0.05);
+      box(knee, 0.1, 0.13, 0.08, C.chrome, 0, -0.33, 0.16, 0.35);    // spring heel
+      box(knee, 0.12, 0.03, 0.1, C.cyan, 0, -0.41, 0.16, 1);
+      const jet = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.55, 6),
         new THREE.MeshBasicMaterial({ color: 0x9ffaff, transparent: true, opacity: 0.85, depthWrite: false }));
-      jet.rotation.x = Math.PI; jet.position.set(0, -0.72, 0.13); jet.visible = false;
+      jet.rotation.x = Math.PI; jet.position.set(0, -0.7, 0.16); jet.visible = false;
       knee.add(jet);
       return { hip, knee, jet };
     };
     this.legL = leg(-1); this.legR = leg(1);
 
     // torso
-    const torso = this.torso = pivot(body, 0, 0.07, 0);
-    box(torso, 0.32, 0.24, 0.2, C.shirt, 0, 0.12, 0);
-    box(torso, 0.46, 0.3, 0.27, C.jacket, 0, 0.38, 0, 0.3);          // cropped jacket
-    box(torso, 0.47, 0.05, 0.28, C.jacketDark, 0, 0.235, 0, 0.2);    // hem
-    box(torso, 0.3, 0.1, 0.1, C.jacketDark, 0, 0.56, 0.1, 0.2);      // popped collar
+    const torso = this.torso = pivot(body, 0, 0.1, 0);
+    box(torso, 0.5, 0.22, 0.28, C.shirt, 0, 0.1, 0);
+    box(torso, 0.56, 0.32, 0.33, C.jacket, 0, 0.36, 0, 0.3);         // cropped jacket
+    box(torso, 0.57, 0.05, 0.34, C.jacketDark, 0, 0.205, 0, 0.2);    // hem
+    box(torso, 0.38, 0.1, 0.1, C.jacketDark, 0, 0.55, 0.13, 0.2);    // popped collar
 
-    // head
-    const head = this.head = pivot(torso, 0, 0.56, 0);
-    box(head, 0.22, 0.24, 0.22, C.skin, 0, 0.13, 0);
-    box(head, 0.24, 0.06, 0.05, C.cyan, 0, 0.16, -0.11, 0.9);        // visor
-    box(head, 0.27, 0.11, 0.28, C.hair, 0, 0.28, 0.01);
-    box(head, 0.26, 0.2, 0.08, C.hair, 0, 0.16, 0.13);
+    // head — a big rounded-off cube
+    const head = this.head = pivot(torso, 0, 0.53, 0);
+    box(head, 0.4, 0.36, 0.36, C.skin, 0, 0.19, 0);
+    box(head, 0.42, 0.09, 0.06, C.cyan, 0, 0.23, -0.17, 0.9);        // visor
+    box(head, 0.44, 0.12, 0.4, C.hair, 0, 0.4, 0.01);
+    box(head, 0.43, 0.28, 0.1, C.hair, 0, 0.26, 0.17);
     const spike = (x, y, z, rx, rz, col = C.hair) => {
-      const s = box(head, 0.09, 0.2, 0.08, col, x, y, z, col === C.streak ? 0.55 : 0.1);
-      s.rotation.set(rx, 0, rz);
+      const sp = box(head, 0.13, 0.24, 0.1, col, x, y, z, col === C.streak ? 0.55 : 0.1);
+      sp.rotation.set(rx, 0, rz);
     };
-    spike(-0.09, 0.33, 0.1, 0.7, 0.35); spike(0.02, 0.36, 0.13, 0.9, 0); spike(-0.1, 0.2, 0.17, 1.2, 0.3);
-    spike(0.0, 0.16, 0.19, 1.3, -0.1); spike(-0.05, 0.34, -0.08, -0.5, 0.3);
-    box(head, 0.08, 0.13, 0.3, C.streak, 0.085, 0.285, 0.0, 0.55);   // bleached streak, front to back
-    spike(0.1, 0.3, 0.15, 1.0, -0.4, C.streak); spike(0.09, 0.25, -0.13, -0.7, -0.3, C.streak);
+    spike(-0.14, 0.46, 0.14, 0.7, 0.35); spike(0.02, 0.5, 0.17, 0.9, 0); spike(-0.16, 0.3, 0.22, 1.2, 0.3);
+    spike(0.0, 0.24, 0.24, 1.3, -0.1); spike(-0.08, 0.47, -0.12, -0.5, 0.3);
+    box(head, 0.11, 0.14, 0.42, C.streak, 0.13, 0.405, 0.0, 0.55);   // bleached streak, front to back
+    spike(0.15, 0.44, 0.2, 1.0, -0.4, C.streak); spike(0.14, 0.36, -0.19, -0.7, -0.3, C.streak);
 
     // backpack — crooked, overstuffed
-    const pack = this.pack = pivot(torso, 0.03, 0.33, 0.24);
+    const pack = this.pack = pivot(torso, 0.04, 0.3, 0.29);
     pack.rotation.set(0.08, 0.1, 0.22);
-    box(pack, 0.4, 0.44, 0.22, C.pack, 0, 0, 0, 0.05);
-    box(pack, 0.3, 0.16, 0.06, C.strap, 0, -0.08, 0.13, 0.05);
-    box(pack, 0.42, 0.06, 0.1, C.strap, 0, 0.2, -0.1, 0.05);          // half-open flap
-    const bills = [[-0.1, 0.27, 0.02, 0.3], [0.06, 0.29, 0.0, -0.25], [0.0, 0.25, 0.07, 0.1], [0.14, 0.24, 0.05, -0.6], [-0.15, 0.22, 0.08, 0.7]];
+    box(pack, 0.48, 0.48, 0.26, C.pack, 0, 0, 0, 0.05);
+    box(pack, 0.36, 0.18, 0.07, C.strap, 0, -0.09, 0.15, 0.05);
+    box(pack, 0.5, 0.07, 0.12, C.strap, 0, 0.22, -0.11, 0.05);        // half-open flap
+    const bills = [[-0.13, 0.3, 0.02, 0.3], [0.08, 0.32, 0.0, -0.25], [0.0, 0.28, 0.08, 0.1], [0.17, 0.27, 0.06, -0.6], [-0.18, 0.25, 0.09, 0.7]];
     for (const [x, y, z, r] of bills) {
-      const b = box(pack, 0.17, 0.1, 0.09, C.cash, x, y, z, 0.75);
+      const b = box(pack, 0.2, 0.12, 0.1, C.cash, x, y, z, 0.75);
       b.rotation.set(r * 0.4, r, r);
-      box(b, 0.05, 0.105, 0.095, 0xffffff, 0, 0, 0, 0.5);
+      box(b, 0.06, 0.125, 0.105, 0xffffff, 0, 0, 0, 0.5);
     }
-    box(pack, 0.12, 0.07, 0.05, C.cash, -0.22, -0.05, 0.02, 0.75).rotation.z = 0.5;
+    box(pack, 0.14, 0.08, 0.06, C.cash, -0.27, -0.05, 0.02, 0.75).rotation.z = 0.5;
 
-    // arms
+    // arms — thick blocks, chrome left forearm
     const arm = (sx, chrome) => {
-      const sh = pivot(torso, sx * 0.28, 0.48, 0);
-      box(sh, 0.13, 0.3, 0.14, C.jacket, 0, -0.14, 0, 0.3);
-      const el = pivot(sh, 0, -0.29, 0);
-      box(el, 0.105, 0.27, 0.115, chrome ? C.chrome : C.skin, 0, -0.13, 0, chrome ? 0.4 : 0.12);
-      if (chrome) box(el, 0.11, 0.03, 0.12, C.cyan, 0, -0.08, 0, 1);
-      box(el, 0.12, 0.1, 0.13, chrome ? C.chrome : C.boot, 0, -0.31, 0, chrome ? 0.4 : 0.05);
+      const sh = pivot(torso, sx * 0.375, 0.47, 0);
+      box(sh, 0.19, 0.28, 0.21, C.jacket, 0, -0.12, 0, 0.3);
+      const el = pivot(sh, 0, -0.26, 0);
+      box(el, 0.17, 0.24, 0.19, chrome ? C.chrome : C.skin, 0, -0.11, 0, chrome ? 0.4 : 0.12);
+      if (chrome) box(el, 0.18, 0.035, 0.2, C.cyan, 0, -0.07, 0, 1);
+      box(el, 0.19, 0.12, 0.21, chrome ? C.chrome : C.boot, 0, -0.28, 0, chrome ? 0.4 : 0.05);
       return { sh, el };
     };
     this.armL = arm(-1, true); this.armR = arm(1, false);
@@ -150,7 +153,7 @@ export class Runner {
       T.hipLx = 0.55; T.hipRx = 0.75; T.knL = -0.45; T.knR = -0.7; T.head = 0.2;
       rate = 26;
     } else if (st === 'slide') {
-      T.pitch = 1.25; T.bodyY = -0.62; T.torso = -0.4; T.head = -0.35;
+      T.pitch = 1.25; T.bodyY = -0.52; T.torso = -0.4; T.head = -0.35;
       T.hipLx = 0.3; T.knL = -0.08; T.hipRx = 1.25; T.knR = -1.8;
       T.shRx = -1.0; T.shRz = 0.35; T.elR = 0.2; T.shLx = 0.7; T.shLz = -0.9; T.elL = 0.9;
       rate = 26;
@@ -172,6 +175,10 @@ export class Runner {
         T.shLx = T.shRx = 0.7; T.elL = T.elR = 0.9; T.hipRx = 1.7; T.knR = -1.9; T.hipLx = 0.2; T.knL = -0.4; T.torso = -0.6; T.bodyY = -0.25;
       }
       rate = 26;
+    } else if (st === 'busted') {
+      T.shLx = T.shRx = 3.0; T.shLz = -0.35; T.shRz = 0.35; T.elL = T.elR = 0.5; T.torso = 0.1; T.head = -0.2;
+      T.hipLx = 0.2; T.hipRx = -0.1; T.knL = -0.3; T.knR = -0.2; T.bodyY = -0.05;
+      rate = 12;
     } else if (st === 'done') {
       T.bodyY = -0.4; T.hipLx = 1.45; T.hipRx = 1.3; T.knL = -1.7; T.knR = -1.5; T.yaw = Math.PI;
       T.shRx = 2.9; T.elR = 0.3; T.shLx = 0.5; T.elL = 1.2; T.torso = 0.05;
@@ -191,7 +198,7 @@ export class Runner {
     for (const key of POSE_KEYS) P[key] += (this.tgt[key] - P[key]) * k;
 
     this.root.position.set(p.x, p.y, -p.d);
-    this.body.position.y = 0.9 + P.bodyY;
+    this.body.position.y = HIP + P.bodyY;
     this.body.rotation.set(P.pitch + this.spin, P.yaw, P.roll);
     this.torso.rotation.set(P.torso, P.twist, 0);
     this.head.rotation.x = P.head;
@@ -206,11 +213,11 @@ export class Runner {
     if (jets) { const sc = 0.7 + Math.random() * 0.7; this.legL.jet.scale.y = this.legR.jet.scale.y = sc; }
 
     // brief collision protection reads as a flicker
-    this.model.visible = !(p.invuln > 0 && p.state !== 'done' && Math.floor(time * 18) % 2 === 0);
+    this.model.visible = !(p.invuln > 0 && p.state !== 'done' && p.state !== 'busted' && Math.floor(time * 18) % 2 === 0);
   }
 
   // world position of the backpack opening (for fluttering bills)
   packPos(out) {
-    return this.pack.localToWorld(out.set(0, 0.3, 0.05));
+    return this.pack.localToWorld(out.set(0, 0.34, 0.05));
   }
 }

@@ -2,7 +2,7 @@
 // Everything is generated at runtime — no external assets.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { colliders, walls, LANDING_PAD, VAN } from './level.js';
+import { colliders, walls, LANDING_PAD, VAN, S } from './level.js';
 
 export const ACCENT = 0xffd60a;        // runnable walls + reachable ledges
 const CYAN = 0x39f0ff, MAGENTA = 0xff3df0, PURPLE = 0x8b5cff, HAZARD = 0xff3b30, WARM = 0xffb347;
@@ -137,6 +137,11 @@ export function buildWorld(scene) {
     g.translate(x, y, -d);
     B.push(isGlow ? 'glow' : 'lit', isGlow ? glowMat : litMat, tint(g, color), d);
   };
+  const addGeo = (g, color, x, y, d, rx = 0, ry = 0, rz = 0, isGlow = false) => {
+    g.applyMatrix4(new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(rx, ry, rz)));
+    g.translate(x, y, -d);
+    B.push(isGlow ? 'glow' : 'lit', isGlow ? glowMat : litMat, tint(g, color), d);
+  };
   const winBox = (v, x0, x1, y0, y1, d0, d1) => {
     const w = x1 - x0, h = y1 - y0, dp = d1 - d0;
     const g = new THREE.BoxGeometry(w, h, dp), uv = g.attributes.uv;
@@ -199,7 +204,7 @@ export function buildWorld(scene) {
     const ring = new THREE.Mesh(new THREE.RingGeometry(190, 200, 48), new THREE.MeshBasicMaterial({ color: 0x39f0ff, fog: false, side: THREE.DoubleSide }));
     ring.position.copy(moon.position); ring.rotation.x = 1.25; scene.add(ring);
   }
-  box(0x0c0918, -400, 400, -1, -0.06, -260, 1500);
+  box(0x0c0918, -400, 400, -1, -0.06, -260, 1700);
 
   // ---------------------------------------------------------------- bank
   {
@@ -258,7 +263,13 @@ export function buildWorld(scene) {
     switch (c.style) {
       case 'roof': {
         winBox(c.win ?? 0, x0 + 0.3, x1 - 0.3, 0, top - 0.5, d0 + 0.3, d1 - 0.3);
-        box(ROOF, x0, x1, top - 0.5, top, d0, d1);
+        box(c.shanty ? 0x4a3a52 : ROOF, x0, x1, top - 0.5, top, d0, d1);
+        // concrete slab seams + patched panels so it reads as a roof, not a runway
+        for (let x = x0 + 3; x < x1 - 1; x += 3) box(0x241f3a, x - 0.04, x + 0.04, top, top + 0.012, d0 + 0.6, d1 - 0.4);
+        for (let d = d0 + 5; d < d1 - 6; d += 9 + R() * 8) {
+          const px = x0 + 1 + R() * (x1 - x0 - 4), pw = 1.2 + R() * 1.6;
+          box([0x453d6e, 0x2e2a4c, 0x51406a, 0x35455e][Math.floor(R() * 4)], px, px + pw, top, top + 0.01, d, d + 1.5 + R() * 2.5);
+        }
         for (let d = Math.ceil(d0 / 12) * 12 + 6; d < d1 - 2; d += 12) glow(0x1f6f8a, x0 + 0.6, x1 - 0.6, top, top + 0.015, d, d + 0.14);
         if (!c.noLip) {                                           // reachable ledge = accent
           glow(ACCENT, x0, x1, top - 0.5, top + 0.02, d0 - 0.06, d0 + 0.5);
@@ -338,9 +349,22 @@ export function buildWorld(scene) {
         }
         break;
       }
-      case 'ramp': {
+      case 'ramp': case 'tin': {
         const len = Math.hypot(d1 - d0, c.yB - c.yA), ang = Math.atan2(c.yB - c.yA, d1 - d0);
         const cy = (c.yA + c.yB) / 2, cd = (d0 + d1) / 2;
+        if (c.style === 'tin') {
+          // corrugated tin roof: coloured sheets with ridges running down the slope
+          const cols = [0x2f8f86, 0x3566a8, 0xa5502f, 0x2f8f86, 0xb04a7a, 0x3566a8];
+          let i = 0;
+          for (let x = x0; x < x1; x += 2, i++) boxR(cols[i % cols.length], 2, 0.3, len, x + 1, cy - 0.17, cd, ang);
+          for (let x = x0 + 0.5; x < x1; x += 0.5) boxR(0x1b1730, 0.06, 0.05, len, x, cy + 0.0, cd, ang);
+          for (const x of [x0 + 0.1, x1 - 0.1]) boxR(MAGENTA, 0.08, 0.08, len, x, cy + 0.04, cd, ang, 0, 0, true);
+          for (let k = 0.1; k < 1; k += 0.2) for (const sx of [-1, 1]) {            // downhill chevrons
+            boxR(0xf2f2ff, 1.6, 0.02, 0.2, (x0 + x1) / 2 + sx * 0.62, c.yA + (c.yB - c.yA) * k + 0.03, d0 + (d1 - d0) * k, ang, sx * 0.6, 0, true);
+          }
+          box(0x1a1528, x0, x1, 0, c.yB - 0.3, d0 + 0.4, d1);
+          break;
+        }
         boxR(0x2e2948, x1 - x0, 0.4, len, (x0 + x1) / 2, cy - 0.22, cd, ang);
         for (let k = 0.08; k < 1; k += 0.14) {
           boxR(0x5a2a80, x1 - x0 - 1, 0.03, 0.14, (x0 + x1) / 2, c.yA + (c.yB - c.yA) * k + 0.0, d0 + (d1 - d0) * k, ang, 0, 0, true);
@@ -382,7 +406,7 @@ export function buildWorld(scene) {
   // final ramp funnel barriers
   for (const sx of [-1, 1]) {
     const ang = Math.atan2(sx * (2.25 - 6), 30), len = Math.hypot(3.75, 30, 8);
-    boxR(CYAN, 0.12, 0.12, len, sx * 4.12, 4.9, 637, Math.atan2(-8, 30), -ang, 0, true);
+    boxR(CYAN, 0.12, 0.12, len, sx * 4.12, 4.9, 637 + S, Math.atan2(-8, 30), -ang, 0, true);
   }
   // landing pad on the far roof (kick-off target)
   {
@@ -417,6 +441,38 @@ export function buildWorld(scene) {
           glow(CYAN, x0 + i * w + 0.05, x0 + (i + 1) * w - 0.05, b + 0.45, b + 0.55, d0 - 0.03, d0);
         }
         glow(MAGENTA, x0, x1, c.y1, c.y1 + 0.04, d0 - 0.05, d0 + 0.05);
+        break;
+      }
+      case 'solar': {
+        const n = Math.max(1, Math.round((x1 - x0) / 1.7)), w = (x1 - x0) / n;
+        for (let i = 0; i < n; i++) {
+          const cx = x0 + (i + 0.5) * w;
+          boxR(0x16305c, w - 0.15, 0.08, d1 - d0 + 0.3, cx, b + 0.55, (d0 + d1) / 2, -0.5);
+          boxR(CYAN, 0.03, 0.09, d1 - d0 + 0.3, cx, b + 0.56, (d0 + d1) / 2, -0.5, 0, 0, true);
+          box(0x3a3d52, cx - 0.06, cx + 0.06, b, b + 0.85, d1 - 0.2, d1 - 0.08);
+        }
+        glow(MAGENTA, x0, x1, c.y1, c.y1 + 0.04, d1 - 0.1, d1);
+        break;
+      }
+      case 'chairs': {
+        const cols = [0xd6342c, 0x3558c9, 0xd6342c];
+        cols.forEach((col, i) => {
+          const cx = x0 + 0.5 + i * ((x1 - x0 - 1) / 2), cd = (d0 + d1) / 2;
+          box(col, cx - 0.28, cx + 0.28, b + 0.42, b + 0.5, cd - 0.28, cd + 0.28);
+          box(col, cx - 0.28, cx + 0.28, b + 0.5, c.y1, cd + 0.2, cd + 0.28);
+          for (const [ox, od] of [[-0.24, -0.24], [0.24, -0.24], [-0.24, 0.24], [0.24, 0.24]]) box(col, cx + ox - 0.03, cx + ox + 0.03, b, b + 0.42, cd + od - 0.03, cd + od + 0.03);
+        });
+        box(0xe9eef5, x0 + 0.95, x0 + 1.55, b, b + 0.4, d0 + 0.1, d0 + 0.5);                   // cooler
+        glow(MAGENTA, x0, x1, c.y1, c.y1 + 0.04, d0 + 0.3, d0 + 0.4);
+        break;
+      }
+      case 'shack': {
+        const col = [0x2f8f86, 0xa5502f, 0x3566a8][Math.floor(d0) % 3];
+        box(col, x0, x1, b, c.y1 - 0.15, d0, d1);
+        for (let x = x0 + 0.4; x < x1; x += 0.4) box(0x1b1730, x - 0.02, x + 0.02, b, c.y1 - 0.15, d0 - 0.02, d0);
+        boxR(0x565b78, x1 - x0 + 0.5, 0.1, d1 - d0 + 0.6, (x0 + x1) / 2, c.y1 - 0.05, (d0 + d1) / 2, 0.08);
+        glow(WARM, x0 + 0.5, x0 + 1.5, b + 1.0, b + 1.7, d0 - 0.04, d0);
+        glow(HAZARD, x0, x1, b, b + 0.08, d0 - 0.06, d0);
         break;
       }
       case 'vending': vending(x0, x1, b, d0, d1, 'back'); glow(HAZARD, x0, x1, c.y1, c.y1 + 0.06, d0 - 0.05, d0 + 0.05); break;
@@ -470,7 +526,7 @@ export function buildWorld(scene) {
   sign('NIGHT MARKET', 15.6, 2.4, 4, 20.4, 267.2, 'back', { fg: '#ff5fd2', bg: '#1a0d2a' });
   for (const d of [288, 306, 322, 338, 364, 388, 406, 420, 434]) laundry(-4, 12, 14 + 5.6 + (d % 3) * 0.5, d);
   for (const d of [30, 70, 100, 140]) { laundry(-13.5, -6.3, 24.2, d); laundry(6.3, 14, 23.6, d + 7); }
-  for (const d of [500, 536]) { for (const x of [-6.2, 6.2]) box(0x15121f, x - 0.08, x + 0.08, 12, 17.4, d - 0.08, d + 0.08); laundry(-6.2, 6.2, 17.3, d); }
+  for (const d of [500, 536, 586, 664, 694]) { if (d > 560) { const yy = d < 620 ? 21 : 13; for (const x of [-6.2, 6.2]) box(0x15121f, x - 0.08, x + 0.08, yy, yy + 5.4, d - 0.08, d + 0.08); laundry(-6.2, 6.2, yy + 5.3, d); continue; } for (const x of [-6.2, 6.2]) box(0x15121f, x - 0.08, x + 0.08, 12, 17.4, d - 0.08, d + 0.08); laundry(-6.2, 6.2, 17.3, d); }
   // rooftop vending + water tanks beside the opening run (out of the lane)
   for (const [x, d, top] of [[-9.5, 60, 20], [9.6, 110, 18], [-10, 180, 16]]) {
     box(0x241f3a, x - 3, x + 3, 0, top, d - 6, d + 6);
@@ -478,16 +534,16 @@ export function buildWorld(scene) {
     vending(x - 1.2, x + 1.2, top, d - 4, d - 3.3, 'back');
   }
   // final sprint signs
-  sign('GETAWAY', 7, 2.2, 0, 12.8, 621.6, 'back', { fg: '#35ff6b', sub: '▼ VAN ▼' });
-  for (const x of [-3.8, 3.8]) box(0x15121f, x - 0.1, x + 0.1, 8, 12.4, 621.5, 621.7);
+  sign('GETAWAY', 7, 2.2, 0, 12.8, 621.6 + S, 'back', { fg: '#35ff6b', sub: '▼ VAN ▼' });
+  for (const x of [-3.8, 3.8]) box(0x15121f, x - 0.1, x + 0.1, 8, 12.4, 621.5 + S, 621.7 + S);
 
   // ---------------------------------------------------------------- elevated rail
   box(0x2b2740, -30.2, -26.8, 19, 20, -120, 900);
   glow(CYAN, -30.25, -30.2, 19.4, 19.6, -120, 900); glow(CYAN, -26.8, -26.75, 19.4, 19.6, -120, 900);
   for (let d = -110; d < 900; d += 32) box(0x211d33, -29.2, -27.8, 0, 19, d, d + 1.6);
-  box(0x2b2740, -80, 80, 16.4, 17.4, 594.4, 597.6);
-  glow(MAGENTA, -80, 80, 16.9, 17.05, 594.3, 594.4);
-  for (const x of [-34, -9, 9, 34]) box(0x211d33, x - 0.7, x + 0.7, 0, 16.4, 595.3, 596.7);
+  box(0x2b2740, -80, 80, 16.4, 17.4, 594.4 + S, 597.6 + S);
+  glow(MAGENTA, -80, 80, 16.9, 17.05, 594.3 + S, 594.4 + S);
+  for (const x of [-34, -9, 9, 34]) box(0x211d33, x - 0.7, x + 0.7, 0, 16.4, 595.3 + S, 596.7 + S);
   const makeTrain = (alongX) => {
     const g = new THREE.Group();
     for (let i = 0; i < 5; i++) {
@@ -504,7 +560,7 @@ export function buildWorld(scene) {
     return g;
   };
   const train = makeTrain(false), crossTrain = makeTrain(true);
-  train.position.set(-28.5, 21.6, 0); crossTrain.position.set(-400, 19, -596);
+  train.position.set(-28.5, 21.6, 0); crossTrain.position.set(-400, 19, -(596 + S));
 
   // ---------------------------------------------------------------- city blocks
   const tower = (x0, x1, d0, d1, h, v) => {
@@ -512,7 +568,7 @@ export function buildWorld(scene) {
     if (R() < 0.55) glow([CYAN, MAGENTA, PURPLE][Math.floor(R() * 3)], x0 - 0.05, x1 + 0.05, h, h + 0.5, d0 - 0.05, d1 + 0.05);
     if (R() < 0.3) { const cx = (x0 + x1) / 2, cd = (d0 + d1) / 2; box(0x15121f, cx - 0.2, cx + 0.2, h, h + 14, cd - 0.2, cd + 0.2); glow(HAZARD, cx - 0.35, cx + 0.35, h + 14, h + 14.7, cd - 0.35, cd + 0.35); }
   };
-  for (let d = -130; d < 1150; ) {
+  for (let d = -130; d < 1300; ) {
     const len = 16 + R() * 20;
     for (const sx of [-1, 1]) {
       const near = sx < 0 ? 38 : 40;
@@ -523,11 +579,11 @@ export function buildWorld(scene) {
     }
     // low filler blocks between the route and the avenues (kept well below the run line)
     if (d < 225 || d > 475) {
-      const routeTop = d < 80 ? 28 : d < 240 ? 26 : d < 560 ? 12 : d < 640 ? 8 : 0;
+      const routeTop = d < 80 ? 28 : d < 240 ? 26 : d < 560 ? 12 : d < 730 ? 9 : d < 640 + S ? 8 : 0;
       const half = d > 160 && d < 240 ? 12 : 6;
       const h = Math.max(0, routeTop - 10 - R() * 5);
       if (h > 2 && d > 4) for (const sx of [-1, 1]) {
-        const xa = half + 2.5, xb = 22;
+        const xa = half + 6.5, xb = 22;
         if (R() < 0.8) winBox(Math.floor(R() * 3), sx > 0 ? xa : -xb, sx > 0 ? xb : -xa, 0, h, d + 1, d + len - 4);
       }
     }
@@ -536,14 +592,100 @@ export function buildWorld(scene) {
   // megatowers on the horizon
   for (let i = 0; i < 16; i++) {
     const x = -330 + i * 44 + R() * 20, w = 26 + R() * 30, h = 150 + R() * 240;
-    winBox(i % 3, x, x + w, 0, h, 1180 + R() * 220, 1260 + R() * 260);
+    winBox(i % 3, x, x + w, 0, h, 1330 + R() * 220, 1410 + R() * 260);
   }
-  sign('GLASS DISTRICT', 46, 9, 96, 118, 760, 'back', { fg: '#39f0ff' });
+  sign('GLASS DISTRICT', 46, 9, 96, 118, 930, 'back', { fg: '#39f0ff' });
   sign('ARCADE', 26, 8, -88, 92, 520, 'back', { fg: '#ff5fd2' });
   sign('NEO SODA', 30, 8, 84, 84, 300, 'back', { fg: '#b388ff' });
   sign('24H', 12, 9, -70, 70, 190, 'back', { fg: '#ffb347' });
   // avenue lane glow
   for (const x of [-34.5, -22.5, 27.5, 39]) glow(0x3b2a6a, x - 0.1, x + 0.1, 0, 0.03, -130, 1150);
+
+  // ---------------------------------------------------------------- rooftop dressing
+  // Side terraces beside the run line carry the lived-in clutter: shacks, tanks, dishes,
+  // antennas, plastic chairs, potted trees, solar panels, umbrellas.
+  const SHEET = [0x2f8f86, 0xa5502f, 0x3566a8, 0xb04a7a, 0x6a7a3a];
+  const dish = (x, y, d, r = 0.7) => {
+    box(0x2b2740, x - 0.05, x + 0.05, y, y + 1.1, d - 0.05, d + 0.05);
+    addGeo(new THREE.CylinderGeometry(r, r * 0.25, 0.22, 10), 0xb9bfd0, x, y + 1.25, d, 0.9, R() * 6, 0);
+  };
+  const antenna = (x, y, d, h = 6) => {
+    box(0x15121f, x - 0.05, x + 0.05, y, y + h, d - 0.05, d + 0.05);
+    for (let k = 0.45; k < 1; k += 0.18) box(0x15121f, x - 0.7 * (1.1 - k), x + 0.7 * (1.1 - k), y + h * k, y + h * k + 0.04, d - 0.03, d + 0.03);
+    glow(HAZARD, x - 0.1, x + 0.1, y + h, y + h + 0.2, d - 0.1, d + 0.1);
+  };
+  const tank = (x, y, d) => {
+    for (const [ox, od] of [[-0.7, -0.7], [0.7, -0.7], [-0.7, 0.7], [0.7, 0.7]]) box(0x211d33, x + ox - 0.07, x + ox + 0.07, y, y + 1.2, d + od - 0.07, d + od + 0.07);
+    cyl(0x5a5378, 1.15, 2.2, x, y + 2.3, d, 'y', false, 10);
+    addGeo(new THREE.ConeGeometry(1.25, 0.6, 10), 0x3a3458, x, y + 3.7, d);
+  };
+  const chair = (x, y, d, col) => {
+    box(col, x - 0.25, x + 0.25, y + 0.4, y + 0.47, d - 0.25, d + 0.25);
+    box(col, x - 0.25, x + 0.25, y + 0.47, y + 0.95, d - 0.25, d - 0.18);
+    for (const [ox, od] of [[-0.2, -0.2], [0.2, -0.2], [-0.2, 0.2], [0.2, 0.2]]) box(col, x + ox - 0.03, x + ox + 0.03, y, y + 0.4, d + od - 0.03, d + od + 0.03);
+  };
+  const tree = (x, y, d) => {
+    cyl(0x6f7590, 0.32, 0.5, x, y + 0.25, d, 'y', false, 8);
+    boxR(0x3b2a22, 0.1, 0.8, 0.1, x + 0.1, y + 0.85, d, 0, 0, -0.3);
+    for (const [ox, oy, sz] of [[0.35, 1.25, 0.7], [-0.2, 1.05, 0.5], [0.1, 1.6, 0.45]]) boxR(0x2f7a52, sz, sz * 0.5, sz, x + ox, y + oy, d + (R() - 0.5) * 0.3, 0, R() * 3, 0);
+  };
+  const solar = (x, y, d) => {
+    boxR(0x16305c, 2.2, 0.08, 1.5, x, y + 0.6, d, -0.5);
+    boxR(CYAN, 2.2, 0.085, 0.03, x, y + 0.6, d, -0.5, 0, 0, true);
+    box(0x3a3d52, x - 0.05, x + 0.05, y, y + 0.9, d + 0.5, d + 0.6);
+  };
+  const umbrella = (x, y, d) => {
+    box(0x9aa0b5, x - 0.03, x + 0.03, y, y + 2.2, d - 0.03, d + 0.03);
+    addGeo(new THREE.ConeGeometry(1.3, 0.5, 8), [0xff8a3d, 0x2fd6e6, 0xff5fa2][Math.floor(R() * 3)], x, y + 2.35, d);
+    cyl(0xe9eef5, 0.4, 0.06, x, y + 0.75, d, 'y', false, 8);
+  };
+  const shack = (x, y, d, w, dp, face) => {
+    const col = SHEET[Math.floor(R() * SHEET.length)], h = 2.3 + R() * 0.8;
+    box(col, x - w / 2, x + w / 2, y, y + h, d - dp / 2, d + dp / 2);
+    boxR(0x565b78, w + 0.5, 0.1, dp + 0.5, x, y + h + 0.08, d, 0, 0, face * 0.1);
+    const xf = face > 0 ? x - w / 2 - 0.03 : x + w / 2;                                     // lit window toward the run line
+    glow([WARM, CYAN, 0xff5fa2][Math.floor(R() * 3)], xf, xf + 0.03, y + 1, y + 1.7, d - dp * 0.3, d + dp * 0.1);
+    box(SHEET[Math.floor(R() * SHEET.length)], xf - 0.01, xf + 0.04, y + 0.1, y + 0.9, d + dp * 0.15, d + dp * 0.45);
+    if (R() < 0.6) box(0x7c8296, x - 0.4, x + 0.4, y + h + 0.13, y + h + 0.7, d - 0.4, d + 0.4);
+  };
+  const terrace = (sx, half, top, d0, d1, w = 5.5) => {
+    const xa = sx > 0 ? half + 0.3 : -half - 0.3 - w, xb = xa + w, cx = (xa + xb) / 2;
+    winBox(Math.floor(R() * 3), xa + 0.2, xb - 0.2, 0, top - 0.7, d0 + 0.6, d1 - 0.6);
+    box(0x2b2644, xa, xb, top - 0.7, top - 0.3, d0 + 0.4, d1 - 0.4);
+    box(0x1b1730, sx > 0 ? xb - 0.25 : xa, sx > 0 ? xb : xa + 0.25, top - 0.3, top + 0.3, d0 + 0.4, d1 - 0.4);
+    const y = top - 0.3;
+    let prev = -1;
+    for (let d = d0 + 3.5; d < d1 - 4; d += 6 + R() * 4) {
+      let k = Math.floor(R() * 8); if (k === prev) k = (k + 1) % 8; prev = k;
+      const far = cx + sx * 1.2, near = cx - sx * 1.4;
+      if (k === 0) shack(far, y, d, 2.8, 3.6, sx);
+      else if (k === 1) tank(far, y, d);
+      else if (k === 2) { dish(far, y, d); dish(near, y, d + 1.4, 0.5); }
+      else if (k === 3) antenna(far, y, d, 5 + R() * 5);
+      else if (k === 4) { chair(near, y, d, 0xd6342c); chair(near + sx * 0.9, y, d + 0.7, 0x3558c9); box(0xe9eef5, near - 0.3, near + 0.3, y, y + 0.4, d + 1.2, d + 1.6); }
+      else if (k === 5) { tree(near, y, d); tree(far, y, d + 1.6); }
+      else if (k === 6) { solar(cx, y, d); solar(cx, y, d + 2); }
+      else umbrella(cx, y, d);
+    }
+    // sagging cables along the outer edge
+    const px = sx > 0 ? xb - 0.4 : xa + 0.4;
+    for (let d = d0 + 2; d < d1 - 12; d += 12) {
+      box(0x15121f, px - 0.05, px + 0.05, y, y + 3.6, d - 0.05, d + 0.05);
+      boxR(0x0b0b12, 0.03, 0.03, 6.1, px, y + 3.3, d + 3, 0.1); boxR(0x0b0b12, 0.03, 0.03, 6.1, px, y + 3.3, d + 9, -0.1);
+    }
+  };
+  for (const [half, top, d0, d1] of [[6, 28, 1, 80], [6, 26, 80, 150], [12, 26, 161, 236], [6, 12, 472, 560], [6, 21, 580, 612], [6, 13, 655, 700], [6, 8, 570 + S, 622 + S]]) {
+    terrace(-1, half, top, d0, d1); terrace(1, half, top, d0, d1);
+  }
+  // steel pergola frames with hanging planters over the shanty roofs (above head height)
+  for (const [d, y] of [[584, 21], [606, 21], [660, 13], [696, 13]]) {
+    for (const x of [-6.1, 6.1]) box(0x24524c, x - 0.1, x + 0.1, y, y + 5.2, d - 0.1, d + 0.1);
+    box(0x24524c, -6.2, 6.2, y + 5.1, y + 5.3, d - 0.1, d + 0.1);
+    for (let x = -5; x < 5.5; x += 2.4) { box(0x2f7a52, x - 0.3, x + 0.3, y + 4.5, y + 5.1, d - 0.25, d + 0.25); }
+    glow([CYAN, 0xff5fa2][Math.floor(d) % 2], -6.2, 6.2, y + 5.3, y + 5.36, d - 0.1, d + 0.1);
+  }
+  sign('SLIDE', 5, 1.8, 0, 26.6, 611, 'back', { fg: '#f2f2ff', sub: '▼ TIN ROOF ▼' });
+  for (const x of [-2.6, 2.6]) box(0x15121f, x - 0.08, x + 0.08, 21, 25.8, 610.9, 611.1);
 
   B.build();
 
@@ -555,8 +697,8 @@ export function buildWorld(scene) {
   lane('d', 29, 1, -130, 1150, 22, 19); lane('d', 31.5, 1, -130, 1150, 18, 15);
   lane('d', 35, -1, -130, 1150, 22, 20); lane('d', 37.5, -1, -130, 1150, 18, 16);
   lane('x', 153.6, 1, -130, 130, 9, 15); lane('x', 157.6, -1, -130, 130, 9, 17);
-  lane('x', 563.2, 1, -130, 130, 9, 15); lane('x', 566.8, -1, -130, 130, 9, 17);
-  lane('d', 5.4, 1, 640, 1150, 9, 15); lane('d', -5.4, -1, 640, 1150, 9, 17);
+  lane('x', 727.2, 1, -130, 130, 9, 15); lane('x', 730.8, -1, -130, 130, 9, 17); lane('x', 649.4, 1, -130, 130, 7, 15); lane('x', 652.6, -1, -130, 130, 7, 17);
+  lane('d', 5.4, 1, 655 + S, 1250, 9, 15); lane('d', -5.4, -1, 655 + S, 1250, 9, 17);
   const traffic = new THREE.InstancedMesh(new THREE.BoxGeometry(1.7, 0.7, 3.8), new THREE.MeshBasicMaterial(), lanes.length);
   traffic.frustumCulled = false;
   const tail = new THREE.Color(0xff2b3b), headl = new THREE.Color(0xfff3c9), side = new THREE.Color(0xffa63d);
@@ -612,7 +754,7 @@ export function buildWorld(scene) {
     update(time, playerD) {
       alarmMat.color.setHex(Math.floor(time * 3) % 2 ? 0xff2030 : 0x4a0a10);
       train.position.z = -(((time * 26) % 1150) - 190);
-      crossTrain.position.x = playerD > 500 ? -160 + ((time * 34) % 420) : -400;
+      crossTrain.position.x = playerD > 500 + S ? -160 + ((time * 34) % 420) : -400;
       lanes.forEach((l, i) => {
         const span = l.b - l.a;
         let p = (l.off + time * l.speed) % span; if (l.dir < 0) p = span - p;

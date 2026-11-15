@@ -7,6 +7,9 @@ export const START_CASH = 50000;
 export const BUNDLE = 2500;
 export const FALL_PENALTY = 5000;
 
+// The finale sits this far beyond its original position (room for the shanty rooftops).
+export const S = 164;
+
 export const colliders = [];
 const add = (c) => { c.id = colliders.length; colliders.push(c); return c; };
 const solid = (x0, x1, top, d0, d1, o = {}) => add({ kind: 'solid', x0, x1, y0: 0, y1: top, d0, d1, ...o });
@@ -46,10 +49,18 @@ solid(12, 26, 46, 240, 440, { style: 'aptwall' });
 solid(-13, -4, 12, 420, 440, { style: 'plaza' });
 solid(-13, 12, 12, 440, 472, { style: 'plaza' });
 solid(-6, 6, 12, 472, 560, { style: 'roof', win: 1 });
-// (gap 560..570)
-solid(-6, 6, 8, 570, 622, { style: 'roof', win: 0 });
-ramp(-6, 6, 622, 652, 8, 0, { style: 'ramp' });
-solid(-8, 8, 0, 652, 1400, { y0: -2, style: 'road' });
+
+// Shanty rooftops: climb, then two long tin-roof slopes to slide
+ramp(-6, 6, 560, 580, 12, 21, { style: 'ramp' });
+solid(-6, 6, 21, 580, 612, { style: 'roof', win: 2, shanty: true });
+ramp(-6, 6, 612, 646, 21, 14, { style: 'tin' });
+// (gap 646..655)
+solid(-6, 6, 13, 655, 700, { style: 'roof', win: 2, shanty: true });
+ramp(-6, 6, 700, 725, 13, 9, { style: 'tin' });
+// (gap 725..734)
+solid(-6, 6, 8, 570 + S, 622 + S, { style: 'roof', win: 0 });
+ramp(-6, 6, 622 + S, 652 + S, 8, 0, { style: 'ramp' });
+solid(-8, 8, 0, 652 + S, 1500, { y0: -2, style: 'road' });
 
 // ---------------------------------------------------------------- obstacles
 low(-5.5, 5.5, 28, 1.0, 46, 1.6, 'ac');
@@ -78,7 +89,19 @@ low(-4, 4, 14, 1.0, 426, 1.4, 'stall');
 low(-5.5, 5.5, 12, 1.0, 494, 1.6, 'ac');
 over(-6, 6, 12, 522, 'shutter');
 low(-6, -0.5, 12, 1.0, 542, 1.4, 'crate');
-low(0.5, 6, 8, 1.0, 592, 1.4, 'crate');
+low(0.5, 6, 8, 1.0, 592 + S, 1.4, 'crate');
+
+// extra rooftop clutter on the opening roofs
+low(2, 5, 28, 1.0, 66, 1.2, 'chairs');
+low(-6, -2.5, 26, 2.4, 94, 3, 'shack');
+low(1, 5, 26, 0.9, 138, 1.4, 'solar');
+// shanty rooftops
+low(-6, -1, 21, 0.9, 592, 1.4, 'solar');
+low(2, 6, 21, 2.4, 600, 3, 'shack');
+over(-6, 6, 21 - 7 * (16 / 34), 628, 'pipes');
+low(-2, 2, 13, 1.0, 668, 1.2, 'chairs');
+low(-6, -3, 13, 2.0, 680, 1.0, 'vending');
+low(-5.5, 5.5, 13, 1.0, 690, 1.6, 'ac');
 
 // ---------------------------------------------------------------- wall runs
 // side: -1 = wall is on the runner's left. x = the runnable face.
@@ -95,9 +118,9 @@ export const clampZones = [
   { d0: 161, d1: 176, a: [-6, 6], b: [-12, 12] },
   { d0: 176, d1: 240, a: [-12, 12], b: [-12, 12] },
   { d0: 440, d1: 472, a: [-13, 12], b: [-6, 6] },
-  { d0: 472, d1: 622, a: [-6, 6], b: [-6, 6] },
-  { d0: 622, d1: 652, a: [-6, 6], b: [-2.05, 2.05] },
-  { d0: 652, d1: 5000, a: [-2.05, 2.05], b: [-2.05, 2.05] },
+  { d0: 472, d1: 622 + S, a: [-6, 6], b: [-6, 6] },
+  { d0: 622 + S, d1: 652 + S, a: [-6, 6], b: [-2.05, 2.05] },
+  { d0: 652 + S, d1: 5000, a: [-2.05, 2.05], b: [-2.05, 2.05] },
 ];
 export function clampAt(d) {
   for (const z of clampZones) {
@@ -111,8 +134,8 @@ export function clampAt(d) {
 export function killY(d) {
   if (d < 240) return 20;
   if (d < 440) return 8;
-  if (d < 565) return 6;
-  if (d < 626) return 2;
+  if (d < 729) return 6;
+  if (d < 626 + S) return 2;
   return -20;
 }
 // The night market is crowded: slightly slower than the rooftops.
@@ -132,8 +155,10 @@ export const checkpoints = [
   { d: 362, x: 4, y: 14, x0: -4, x1: 12 },
   { d: 446, x: 0, y: 12 },
   { d: 530, x: 2.5, y: 12 },
-  { d: 574, x: -2, y: 8 },
-  { d: 656, x: 0, y: 0 },
+  { d: 583, x: 2, y: 21 },
+  { d: 660, x: 0, y: 13 },
+  { d: 574 + S, x: -2, y: 8 },
+  { d: 656 + S, x: 0, y: 0 },
 ];
 
 // Tutorial prompts: shown while the runner is inside the zone.
@@ -145,9 +170,14 @@ export const prompts = [
   { d0: 170, d1: 232, key: 'split' },
   { d0: 232, d1: 252, x1: -4, key: 'wall' },
   { d0: 396, d1: 421, x1: -4, yMin: 20, key: 'roll' },
-  { d0: 548, d1: 561, key: 'gap' },
-  { d0: 640, d1: 5000, key: 'van' },
+  { d0: 236, d1: 262, x0: -4, key: 'slope' },
+  { d0: 600, d1: 640, key: 'slope' },
+  { d0: 640, d1: 648, key: 'gap' },
+  { d0: 696, d1: 716, key: 'slope' },
+  { d0: 716, d1: 727, key: 'gap' },
+  { d0: 640 + S, d1: 5000, key: 'van' },
 ];
 
-export const VAN = { startD: 676, triggerD: 628, speed: 7.2, x: 0, bedY: 0.75 };
-export const LEVEL_END = 720;
+export const VAN = { startD: 676 + S, triggerD: 628 + S, speed: 7.2, x: 0, bedY: 0.75 };
+export const LEVEL_END = 720 + S;
+export const CHASE_TIME = 8;
