@@ -7,6 +7,7 @@ import { Fx, makeBundleMesh } from './fx.js';
 import { Sfx } from './audio.js';
 import { Input } from './input.js';
 import { Cop } from './cop.js';
+import { Gfx } from './gfx.js';
 import * as L from './level.js';
 
 const $ = (id) => document.getElementById(id);
@@ -21,18 +22,11 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x120a26);
 scene.fog = new THREE.Fog(0x24104a, 60, 980);
 const camera = new THREE.PerspectiveCamera(62, 1, 0.1, 3200);
-function resize() {
-  const w = innerWidth, h = innerHeight;
-  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, matchMedia('(pointer: coarse)').matches ? 1.5 : 2));
-  renderer.setSize(w, h, false);
-  camera.aspect = w / h;
-  camera.updateProjectionMatrix();
-}
-addEventListener('resize', resize);
-resize();
-
 // ---------------------------------------------------------------- objects
-const world = buildWorld(scene);
+const world = buildWorld(scene, renderer);
+const gfx = new Gfx(renderer, scene, camera, (level) => world.setQuality(level));
+$('gfxbtn').textContent = 'GFX ' + gfx.label;
+addEventListener('resize', () => gfx.resize());
 const player = new Player();
 const runner = new Runner();
 scene.add(runner.root);
@@ -208,6 +202,7 @@ function handleEvents() {
         if (e.kind === 'roll') { sfx.play('roll'); toast('ROLL!', 'trick'); }
         else if (e.kind === 'hard') { sfx.play('hard'); game.shake = 0.35; toast('HARD LANDING', 'trick'); }
         else sfx.play('land');
+        fx.puff(player.x, player.y, player.d, e.kind === 'soft' ? 4 : 10);
         break;
       case 'clip':
         if (game.chaseT > 0) { busted(); player.events.length = 0; return; }   // tripped with the officer on your tail
@@ -383,9 +378,13 @@ function present(rdt) {
   for (const [x, d] of HUM_SPOTS) hum = Math.max(hum, 1 - Math.hypot(x - player.x, d - player.d) / 16);
   sfx.setHum(game.state === 'play' ? hum : 0);
 
+  if (player.state === 'slide' && player.grounded && game.state === 'play') fx.slide(sdt, player.x, player.y, player.d, player.speed);
+  // the shadow-casting light follows the runner (snapped so shadow edges don't shimmer)
+  const sx = Math.round(player.x / 2) * 2, sy = Math.round(player.y / 2) * 2, sz = Math.round(-player.d / 2) * 2;
+  world.sun.position.set(sx - 9, sy + 70, sz + 42); world.sun.target.position.set(sx, sy, sz - 6); world.sun.target.updateMatrixWorld();
   updateCamera(rdt);
   updateHud();
-  renderer.render(scene, camera);
+  gfx.render(rdt, game.clock, player.boostT > 0 && game.state === 'play' ? Math.min(1, player.speed / 15) : 0, Math.min(1, game.shake * 1.6), player.d < 0.5 && game.state !== 'finish');
 }
 
 let last = performance.now();
@@ -405,6 +404,7 @@ input.onRetry = (code) => {
 input.onMute = () => { sfx.setMuted(!sfx.muted); $('mute').classList.toggle('off', sfx.muted); };
 input.bindTouch({ root: $('touch'), steer: $('steer'), knob: $('knob'), jump: $('btn-jump'), slide: $('btn-slide') });
 $('mute').classList.toggle('off', sfx.muted);
+$('gfxbtn').addEventListener('click', () => { gfx.cycle(); $('gfxbtn').textContent = 'GFX ' + gfx.label; $('gfxbtn').blur(); });
 $('mute').addEventListener('click', () => { sfx.unlock(); input.onMute(); $('mute').blur(); });
 $('title').addEventListener('pointerdown', (e) => { e.preventDefault(); sfx.unlock(); input.pressJump(); });
 $('retry').addEventListener('click', () => { sfx.unlock(); resetRun(true); $('retry').blur(); });
@@ -415,4 +415,4 @@ showBests();
 requestAnimationFrame(frame);
 
 // Debug / automated playtest hook.
-window.__ch = { game, player, input, runner, cop, level: L, tick, resetRun, store, camera };
+window.__ch = { game, player, input, runner, cop, gfx, level: L, tick, resetRun, store, camera };

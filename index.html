@@ -34,6 +34,8 @@
   #time { font-size: clamp(18px, 4.4vw, 26px); color: var(--cyan); font-variant-numeric: tabular-nums; }
   #mute { position: absolute; top: max(10px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); width: 42px; height: 42px;
     pointer-events: auto; background: rgba(13,8,32,.72); color: #fff; border: 2px solid rgba(255,255,255,.25); font: 18px var(--font); cursor: pointer; }
+  #gfxbtn { position: absolute; top: calc(max(10px, env(safe-area-inset-top)) + 48px); right: max(12px, env(safe-area-inset-right)); pointer-events: auto;
+    background: rgba(13,8,32,.72); color: #cfc8ff; border: 2px solid rgba(255,255,255,.2); font: 10px var(--font); letter-spacing: .08em; padding: 5px 7px; cursor: pointer; }
   #mute.off { opacity: .45; text-decoration: line-through; }
   #progress { position: absolute; left: 0; right: 0; top: 0; height: 4px; background: rgba(255,255,255,.08); }
   #progfill { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--pink), var(--cyan)); }
@@ -120,6 +122,7 @@
     <div id="cashbox" class="chip"><span class="lbl">CASH</span><span id="cash">$50,000</span><span id="delta"></span></div>
     <div id="timebox" class="chip"><span class="lbl">TIME</span><span id="time">0:00.0</span></div>
     <button id="mute" aria-label="Toggle sound">♪</button>
+    <button id="gfxbtn" aria-label="Graphics quality">GFX</button>
     <div id="chase"><span>⚠ OFFICER ON YOUR TAIL — DON'T TRIP</span><i id="chasefill"></i></div>
     <div id="prompt"></div>
     <div id="toast"></div>

@@ -45,10 +45,32 @@ export class Fx {
       new THREE.MeshBasicMaterial({ color: 0x4dff7c, side: THREE.DoubleSide }), 90, 5);
     this.shards = new Particles(scene, new THREE.CircleGeometry(0.22, 3),
       new THREE.MeshBasicMaterial({ color: 0xbff6ff, side: THREE.DoubleSide, transparent: true, opacity: 0.75, depthWrite: false }), 110, 16);
+    this.sparks = new Particles(scene, new THREE.PlaneGeometry(0.05, 0.34),
+      new THREE.MeshBasicMaterial({ color: 0xffc46b, side: THREE.DoubleSide, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }), 70, 14);
+    this.dust = new Particles(scene, new THREE.CircleGeometry(0.3, 7),
+      new THREE.MeshBasicMaterial({ color: 0x8f86b8, side: THREE.DoubleSide, transparent: true, opacity: 0.3, depthWrite: false }), 40, -1.5);
+    this.sparkT = 0;
     this.v = new THREE.Vector3(); this.p = new THREE.Vector3();
     this.billT = 0;
   }
-  reset() { this.bills.clear(); this.shards.clear(); }
+  reset() { this.bills.clear(); this.shards.clear(); this.sparks.clear(); this.dust.clear(); }
+  // sparks off the heels while sliding
+  slide(dt, x, y, d, speed) {
+    this.sparkT -= dt;
+    if (this.sparkT > 0) return;
+    this.sparkT = 0.025;
+    this.p.set(x + (Math.random() - 0.5) * 0.5, y + 0.08, -d - 0.5);
+    this.v.set((Math.random() - 0.5) * 5, 1.5 + Math.random() * 3.5, speed * 0.25 + Math.random() * 4);
+    this.sparks.spawn(this.p, this.v, 0.3 + Math.random() * 0.25, 0.8 + Math.random());
+  }
+  puff(x, y, d, n) {
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * 6.283;
+      this.p.set(x + Math.cos(a) * 0.3, y + 0.15, -d + Math.sin(a) * 0.3);
+      this.v.set(Math.cos(a) * (1.5 + Math.random() * 2), 0.4 + Math.random(), Math.sin(a) * (1.5 + Math.random() * 2) - 3);
+      this.dust.spawn(this.p, this.v, 0.5 + Math.random() * 0.3, 1 + Math.random() * 1.4);
+    }
+  }
 
   // a few loose bills constantly escape the backpack (cosmetic only)
   trail(dt, pos, speed) {
@@ -71,7 +93,7 @@ export class Fx {
       this.shards.spawn(this.p, this.v, 1.6 + Math.random() * 1.2, 0.6 + Math.random() * 1.6);
     }
   }
-  update(dt, time) { this.bills.update(dt, time); this.shards.update(dt, time); }
+  update(dt, time) { this.bills.update(dt, time); this.shards.update(dt, time); this.sparks.update(dt, time); this.dust.update(dt, time); }
 }
 
 export function makeBundleMesh() {

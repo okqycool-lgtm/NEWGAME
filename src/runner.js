@@ -10,7 +10,11 @@ const C = {
 const mats = {};
 const mat = (c, glow = 0) => {
   const k = c + ':' + glow;
-  if (!mats[k]) mats[k] = new THREE.MeshLambertMaterial({ color: c, emissive: c, emissiveIntensity: glow, flatShading: true });
+  if (!mats[k]) {
+    const chrome = c === C.chrome;       // real metal so the forearm and heels catch the neon
+    mats[k] = new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: chrome ? 0.08 : glow * 1.6 + 0.08, flatShading: true,
+      roughness: chrome ? 0.18 : 0.7, metalness: chrome ? 1 : 0.05, envMapIntensity: chrome ? 2.4 : 1 });
+  }
   return mats[k];
 };
 function box(parent, w, h, d, color, x = 0, y = 0, z = 0, glow = 0.12) {
@@ -103,6 +107,7 @@ export class Runner {
     };
     this.armL = arm(-1, true); this.armR = arm(1, false);
 
+    root.traverse((o) => { if (o.isMesh && o.material.isMeshStandardMaterial) o.castShadow = true; });
     this.pose = {}; for (const k of POSE_KEYS) this.pose[k] = 0;
     this.tgt = { ...this.pose };
     this.spin = 0;

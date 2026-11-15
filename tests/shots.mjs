@@ -5,7 +5,7 @@ const { chromium } = createRequire(import.meta.url)(process.env.PW || 'playwrigh
 const bot = readFileSync(new URL('./bot.js', import.meta.url), 'utf8');
 const browser = await chromium.launch({ args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
-await page.goto(process.env.URL || 'http://localhost:5173/');
+await page.goto((process.env.URL || 'http://localhost:5173/') + '?gfx=' + (process.env.GFX || 'high'));
 await page.waitForFunction(() => window.__ch);
 await page.addScriptTag({ content: bot });
 const want = (process.argv[2] || '').split(',').filter(Boolean);

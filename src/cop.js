@@ -33,6 +33,7 @@ export class Cop {
     // flashing glow that reads from behind the camera
     this.glow = new THREE.Mesh(new THREE.CircleGeometry(0.9, 20), new THREE.MeshBasicMaterial({ color: 0xff2030, transparent: true, opacity: 0.25, depthWrite: false }));
     this.glow.rotation.x = -Math.PI / 2; this.glow.position.y = 0.05; root.add(this.glow);
+    root.traverse((o) => { if (o.isMesh && o.material.isMeshLambertMaterial) o.castShadow = true; });
     root.visible = false;
     scene.add(root);
     this.reset();
