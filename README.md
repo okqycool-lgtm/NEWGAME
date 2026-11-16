@@ -30,6 +30,7 @@ npm run dev      # prints a local URL and a network URL (open that on a phone / 
 - **Vault:** jump when you're right at a low obstacle. Jump earlier and it's a normal jump.
 - **Wall run:** jump beside the yellow billboard and steer into it; jump again on the KICK panel.
 - **Roll:** tap slide just before landing from a long drop to keep your speed.
+- **Perfect moves:** vault at the last moment, slide just before an overhead obstacle, or roll right at touchdown for a bigger speed burst. Perfect moves within about 6 seconds of each other chain into a combo that raises the boost further; a stumble or hard landing breaks it.
 - **Slopes:** slide on a downhill roof and you ride it to the bottom at extra speed, and keep that speed off the lip.
 - Clip an obstacle and a $2,500 bundle flies out — chase it down to get it back.
   Falling off the route costs $5,000 and puts you back at the last checkpoint.

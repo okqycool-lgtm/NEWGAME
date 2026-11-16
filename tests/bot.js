@@ -23,7 +23,7 @@ window.runBot = function (opts) {
     }
     if (d < 530) return 0; if (d < 548) return 3; if (d < 596) return 2; if (d < 606) return -3; if (d < 676) return 0; if (d < 686) return 2; if (d < 744) return 0; if (d < 764) return -3; return 0;
   };
-  let maxSpeed = 0;
+  let maxSpeed = 0, topSpeed = 0, maxCombo = 0;
   while (t < o.maxT && game.state !== 'finish' && game.state !== 'busted' && !(o.stopD && p.d >= o.stopD)) {
     const inp = { steer: 0, jump: false, slide: false, slideHeld: false };
     if (game.state === 'ready') { if (!o.retry && t > 0.05) inp.jump = true; }
@@ -32,9 +32,9 @@ window.runBot = function (opts) {
       const d = p.d;
       // vaults
       const v = p.grounded && p.findVault();
-      if (v && v.d0 - d < 2.3 && (o.vaultAC || v.d0 !== 46)) inp.jump = true;
+      if (v && v.d0 - d < (o.perfect ? 1.4 : 2.3) && (o.vaultAC || v.d0 !== 46)) inp.jump = true;
       // shutters
-      const sh = L.colliders.find((c) => c.kind === 'over' && c.d0 - d < 3.2 && c.d1 - d > -1 && p.x + 0.4 > c.x0 && p.x - 0.4 < c.x1 && Math.abs(c.base - p.y) < 1);
+      const sh = L.colliders.find((c) => c.kind === 'over' && c.d0 - d < (o.perfect ? 2.4 : 3.2) && c.d1 - d > -1 && p.x + 0.4 > c.x0 && p.x - 0.4 < c.x1 && Math.abs(c.base - p.y) < 1);
       const slope = p.grounded && p.ground && p.ground.kind === 'ramp' && p.ground.yB < p.ground.yA && o.slopes !== false;
       if (slope) { inp.slideHeld = true; if (p.state === 'run') inp.slide = true; }
       if (sh && o.noSlide) { /* run straight into it */ } else
@@ -58,7 +58,7 @@ window.runBot = function (opts) {
     tick(1 / 120, inp);
     t += 1 / 120;
     if (game.cash !== lastCash) { cashLog.push({ t: +game.time.toFixed(2), d: +p.d.toFixed(1), cash: game.cash }); lastCash = game.cash; }
-    maxCash = Math.max(maxCash, game.cash); if (p.state === 'slide') maxSpeed = Math.max(maxSpeed, p.speed);
+    maxCash = Math.max(maxCash, game.cash); topSpeed = Math.max(topSpeed, p.speed); maxCombo = Math.max(maxCombo, p.combo); if (p.state === 'slide') maxSpeed = Math.max(maxSpeed, p.speed);
   }
   // let the finish settle so results + bests are written
   if (game.state === 'finish' || game.state === 'busted') for (let i = 0; i < 200; i++) tick(1 / 120, { steer: 0, jump: false, slide: false, slideHeld: false });
@@ -69,6 +69,6 @@ window.runBot = function (opts) {
     tricks: ['vault', 'wallrun', 'kickoff', 'ledge', 'bounce', 'clip', 'fall', 'djump', 'slide'].map((k) => k + ':' + count(k)).join(' '),
     lands: log.filter((e) => e.type === 'land' && e.kind !== 'soft').map((e) => e.kind + '@' + e.d).join(' '),
     notable: log.filter((e) => ['clip', 'fall', 'bounce', 'ledge', 'wallrun', 'kickoff', 'walloff', 'van'].includes(e.type)),
-    cashLog, result: game.result, maxSlideSpeed: +maxSpeed.toFixed(1), chaseT: +game.chaseT.toFixed(2), resultsShown: game.resultsShown,
+    cashLog, result: game.result, topSpeed: +topSpeed.toFixed(1), maxCombo, perfects: log.filter((e) => e.type === 'vault' || e.type === 'slide').length, maxSlideSpeed: +maxSpeed.toFixed(1), chaseT: +game.chaseT.toFixed(2), resultsShown: game.resultsShown,
   };
 };

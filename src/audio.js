@@ -78,6 +78,13 @@ export class Sfx {
     }
   }
 
+  // rising chime: each step of a combo climbs the scale
+  perfect(combo) {
+    const base = 660 * Math.pow(1.122, Math.min(8, Math.max(0, combo - 1)));
+    this.tone(base, base, 0.1, 'square', 0.1); this.tone(base * 1.5, base * 1.5, 0.16, 'triangle', 0.12, 0.07);
+    this.noise(0.25, 0.1, 2500, 'highpass', 0, 6000);
+  }
+
   // tiny 16-step synth loop
   schedule() {
     const ctx = this.ctx;

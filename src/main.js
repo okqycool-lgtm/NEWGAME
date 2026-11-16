@@ -79,7 +79,7 @@ function resetRun(retry) {
 }
 
 // ---------------------------------------------------------------- HUD helpers
-const hud = { cash: -1, time: '', prompt: '', prog: -1 };
+const hud = { cash: -1, time: '', prompt: '', prog: -1, combo: 0 };
 function restart(el, cls) { el.className = ''; void el.offsetWidth; el.className = cls; }
 function toast(text, cls) { $('toast').textContent = text; restart($('toast'), 'show ' + cls); }
 function delta(text, cls) {
@@ -130,6 +130,9 @@ function updateHud() {
   }
   const prog = Math.round(Math.max(0, Math.min(1, player.d / (700 + L.S))) * 200) / 2;
   if (prog !== hud.prog) { hud.prog = prog; $('progfill').style.width = prog + '%'; }
+  const combo = game.state === 'play' && player.combo >= 2 ? player.combo : 0;
+  if (combo !== hud.combo) { hud.combo = combo; $('combo').classList.toggle('show', combo > 0); if (combo) { $('combotxt').textContent = `COMBO ×${combo}`; restart($('combotxt'), 'bump'); } }
+  if (combo) $('combofill').style.width = Math.max(0, player.comboT / 6.5) * 100 + '%';
   const chasing = game.chaseT > 0 && game.state === 'play';
   $('chase').classList.toggle('show', chasing);
   if (chasing) $('chasefill').style.width = (game.chaseT / L.CHASE_TIME) * 100 + '%';
@@ -185,6 +188,10 @@ function updateBundles(dt) {
 
 // ---------------------------------------------------------------- simulation
 const TRICKS = { vault: 'SPEED VAULT', wallrun: 'WALL RUN', kickoff: 'KICK-OFF!', ledge: 'LEDGE CATCH', bounce: 'AWNING SAVE!' };
+function perfectMove(name, combo) {
+  toast(combo > 1 ? `${name} ×${combo}` : name, 'perfect');
+  sfx.perfect(combo);
+}
 function handleEvents() {
   for (const e of player.events) {
     switch (e.type) {
@@ -195,11 +202,15 @@ function handleEvents() {
         break;
       case 'jump': sfx.play('jump'); break;
       case 'djump': sfx.play('djump'); break;
-      case 'slide': sfx.play('slide'); break;
-      case 'vault': case 'wallrun': case 'kickoff': case 'ledge': case 'bounce':
+      case 'slide': sfx.play('slide'); if (e.perfect) perfectMove('PERFECT SLIDE', e.combo); break;
+      case 'vault': case 'kickoff':
+        sfx.play(e.type);
+        if (e.perfect) perfectMove(e.type === 'vault' ? 'PERFECT VAULT' : 'PERFECT KICK-OFF', e.combo); else toast(TRICKS[e.type], 'trick');
+        break;
+      case 'wallrun': case 'ledge': case 'bounce':
         sfx.play(e.type); toast(TRICKS[e.type], 'trick'); break;
       case 'land':
-        if (e.kind === 'roll') { sfx.play('roll'); toast('ROLL!', 'trick'); }
+        if (e.kind === 'roll') { sfx.play('roll'); if (e.perfect) perfectMove('PERFECT ROLL', e.combo); else toast('ROLL!', 'trick'); }
         else if (e.kind === 'hard') { sfx.play('hard'); game.shake = 0.35; toast('HARD LANDING', 'trick'); }
         else sfx.play('land');
         fx.puff(player.x, player.y, player.d, e.kind === 'soft' ? 4 : 10);

@@ -68,6 +68,15 @@ check('second stumble during the chase = busted, bests untouched', r.state === '
 r = await run({ route: 'market', retry: true, stopD: 30 });
 check('retry after a bust starts a clean run', r.state === 'play' && r.cash === 50000 && r.chaseT === 0);
 
+// perfect moves: bigger boost, and they chain into a combo
+const plain = await run({ route: 'market', retry: true });
+r = await run({ route: 'market', retry: true, perfect: true });
+if (verbose) console.log(JSON.stringify({ plain: [plain.time, plain.topSpeed, plain.maxCombo], perfect: [r.time, r.topSpeed, r.maxCombo], notable: r.notable }));
+check('perfect vaults and slides chain into a combo', r.state === 'finish' && r.maxCombo >= 3 && plain.maxCombo === 0, `best chain x${r.maxCombo}`);
+check('perfect play is clearly faster', r.time < plain.time - 3 && r.cash === 50000, `time ${r.time}s vs ${plain.time}s`);
+r = await run({ route: 'market', retry: true, perfect: true, vaultAC: false, stopD: 60 });
+check('a stumble breaks the combo', r.maxCombo === 0 || (await page.evaluate(() => __ch.player.combo)) === 0);
+
 // swipe gestures, driven with real pointer events against the stepped simulation
 const sw = await page.evaluate(() => {
   const { game, player: p, input, tick, resetRun } = window.__ch, zone = document.getElementById('steerzone');

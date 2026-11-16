@@ -13,6 +13,10 @@ const STEP_UP = 0.45;
 const LEDGE_REACH = 1.6;
 const VAULT_RANGE = 3.3;
 const ROLL_DROP = 6.5;
+const COMBO_WINDOW = 6.5;       // seconds to land the next perfect move before the chain drops
+const PERFECT_VAULT = 1.3;     // metres from the obstacle: jump this late and the vault is perfect
+const PERFECT_SLIDE = 2.4;     // metres from the overhead edge
+const PERFECT_ROLL = 0.11;     // seconds before touchdown
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const smooth = (a, b, v) => { const t = clamp((v - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
@@ -33,7 +37,7 @@ export class Player {
       x: 0, y: 34, d: retry ? -9.5 : -12, vx: 0, vy: 0, speed: BASE_SPEED,
       grounded: true, state: 'ready', stateT: 0, autoKick: retry, kickPhase: 0,
       usedDouble: false, jumpBuf: 0, slideBuf: 0, coyote: 0,
-      invuln: 0, slowT: 0, hardT: 0, boostT: 0, stumbleT: 0,
+      invuln: 0, slowT: 0, hardT: 0, boostT: 0, stumbleT: 0, boostMul: 1.15, combo: 0, comboT: 0, bestCombo: 0,
       kickT: 0, kickDur: 0.45, kickVx: 0, assistT: 0, assistVx: 0,
       wall: null, wallT: 0, wallCd: 0, awayT: 0,
       peakY: 34, blockedT: 0, ghosts: new Set(), cp: checkpoints[0],
@@ -47,7 +51,7 @@ export class Player {
     Object.assign(this, {
       x: cp.x, y: cp.y, d: cp.d, vx: 0, vy: 0, speed: 4, grounded: true,
       usedDouble: false, jumpBuf: 0, slideBuf: 0, coyote: 0,
-      invuln: 1.6, slowT: 0, hardT: 0, boostT: 0, stumbleT: 0, kickT: 0, assistT: 0,
+      invuln: 1.6, slowT: 0, hardT: 0, boostT: 0, stumbleT: 0, kickT: 0, assistT: 0, boostMul: 1.15, combo: 0, comboT: 0,
       wall: null, wallCd: 0, peakY: cp.y, blockedT: 0, vault: null, ledge: null,
     });
     this.ghosts.clear();
@@ -80,6 +84,24 @@ export class Player {
     return this.grounded && !!g && g.kind === 'ramp' && g.yB < g.yA && this.d < g.d1 - 0.3;
   }
 
+  // Every clean move gives a burst of speed. Perfect ones give a bigger burst and chain:
+  // each perfect move inside the combo window raises the multiplier further.
+  trick(perfect) {
+    if (perfect) {
+      this.combo = this.comboT > 0 ? this.combo + 1 : 1;
+      this.bestCombo = Math.max(this.bestCombo, this.combo);
+      this.comboT = COMBO_WINDOW;
+      this.boostMul = Math.min(1.5, 1.24 + 0.065 * (this.combo - 1));
+      this.boostT = 2.6;
+    } else {
+      if (this.boostT <= 0) this.boostMul = 1.15;
+      this.boostT = Math.max(this.boostT, 1.4);
+      if (this.comboT > 0) this.comboT = Math.max(this.comboT, 2.5);      // a clean move keeps the chain alive
+    }
+    return perfect ? this.combo : 0;
+  }
+  breakCombo() { this.combo = 0; this.comboT = 0; this.boostT = 0; this.boostMul = 1.15; }
+
   findVault() {
     let best = null, bestGap = Infinity;
     for (const c of colliders) {
@@ -98,9 +120,10 @@ export class Player {
     this.steer = inp.steer;
     this.jumpBuf = inp.jump ? 0.14 : this.jumpBuf - dt;
     this.slideBuf = inp.slide ? 0.24 : this.slideBuf - dt;
-    for (const k of ['invuln', 'slowT', 'hardT', 'boostT', 'stumbleT', 'kickT', 'assistT', 'wallCd', 'coyote']) {
+    for (const k of ['invuln', 'slowT', 'hardT', 'boostT', 'stumbleT', 'kickT', 'assistT', 'wallCd', 'coyote', 'comboT']) {
       if (this[k] > 0) this[k] -= dt;
     }
+    if (this.comboT <= 0 && this.combo) this.combo = 0;
     this.djT += dt; this.landT += dt;
 
     switch (this.state) {
@@ -163,10 +186,11 @@ export class Player {
       const w = this.wall;
       this.vy = 10.5; this.vx = 0;
       this.kickVx = -w.side * 6.5; this.kickT = this.kickDur;
-      this.usedDouble = false; this.wallCd = 0.6; this.boostT = 1.5;
+      this.usedDouble = false; this.wallCd = 0.6;
       this.wall = null; this.peakY = this.y; this.jumpBuf = 0;
       this.setState('air');
-      this.emit('kickoff', { good: this.d >= w.kickFrom - 6 });
+      const good = this.d >= w.kickFrom;
+      this.emit('kickoff', { good, perfect: good, combo: this.trick(good) });
       return;
     }
     const low = this.state === 'slide' || this.state === 'roll';
@@ -175,9 +199,10 @@ export class Player {
       const v = this.grounded && !low ? this.findVault() : null;
       if (v) {
         this.vault = { c: v, d0: this.d, y0: this.y, dEnd: v.d1 + 1.4, speed: Math.max(this.speed, BASE_SPEED) * 1.08 };
-        this.grounded = false; this.boostT = 1.4;
+        this.grounded = false;
+        const perfect = v.d0 - (this.d + HD) <= PERFECT_VAULT, combo = this.trick(perfect);
         this.setState('vault');
-        this.emit('vault');
+        this.emit('vault', { perfect, combo });
         return;
       }
       this.vy = JUMP_V; this.grounded = false; this.peakY = this.y;
@@ -194,7 +219,15 @@ export class Player {
     if (this.state === 'run' && this.grounded && this.slideBuf > 0) {
       this.slideBuf = 0;
       this.setState('slide');
-      this.emit('slide');
+      // sliding at the last moment under something is a perfect slide
+      let perfect = false;
+      for (const c of colliders) {
+        if (c.kind !== 'over' || this.ghosts.has(c.id) || Math.abs(c.base - this.y) > 1.2) continue;
+        if (this.x + HW <= c.x0 || this.x - HW >= c.x1) continue;
+        const gap = c.d0 - (this.d + HD);
+        if (gap >= -0.1 && gap <= PERFECT_SLIDE) perfect = true;
+      }
+      this.emit('slide', { perfect, combo: perfect ? this.trick(true) : 0 });
     } else if (this.state === 'slide') {
       // on a downhill slope the slide carries all the way to the bottom
       if (this.onSlope()) this.boostT = Math.max(this.boostT, 1.2);
@@ -209,6 +242,7 @@ export class Player {
     if (this.invuln > 0) return;
     const before = this.speed;
     this.invuln = 1.2; this.slowT = 0.7; this.stumbleT = 0.55;
+    this.breakCombo();
     this.speed *= 0.5;
     this.emit('clip', { c, before });
   }
@@ -255,7 +289,7 @@ export class Player {
 
   moveForward(dt) {
     let target = BASE_SPEED * speedMult(this.d, this.y);
-    if (this.boostT > 0) target *= 1.15;
+    if (this.boostT > 0) target *= this.boostMul;
     if (this.state === 'wallrun') target = Math.max(target, BASE_SPEED * 1.12);
     if (this.state === 'slide' && this.onSlope()) target = BASE_SPEED * 1.4;      // gravity does the work
     if (this.slowT > 0) target *= 0.5;
@@ -335,12 +369,13 @@ export class Player {
     this.firstLanding = false;
     if (fall >= ROLL_DROP && !first) {
       if (this.slideBuf > 0) {
-        this.slideBuf = 0; this.boostT = 1.2; this.landKind = 'roll';
+        const perfect = this.slideBuf >= 0.24 - PERFECT_ROLL, combo = this.trick(perfect);
+        this.slideBuf = 0; this.landKind = 'roll';
         this.setState('roll');
-        this.emit('land', { kind: 'roll', fall });
+        this.emit('land', { kind: 'roll', fall, perfect, combo });
         return;
       }
-      this.hardT = 0.45; this.speed *= 0.6; this.landKind = 'hard';
+      this.hardT = 0.45; this.speed *= 0.6; this.landKind = 'hard'; this.breakCombo();
       this.setState('run');
       this.emit('land', { kind: 'hard', fall });
       return;
