@@ -91,18 +91,18 @@ function showBests() {
   $('title-bests').textContent = bc === null ? '' : `BEST CASH ${money(bc)}  ·  BEST TIME ${clock(bt)}`;
 }
 const PROMPTS = {
-  steer: ['<b>A / D</b> or <b>← →</b> to steer', '<b>Swipe anywhere</b> to steer'],
-  vault: ['<b>VAULT</b> — press <b>SPACE</b> right at the unit', '<b>VAULT</b> — tap <b>JUMP</b> right at the unit'],
-  slide: ['<b>SLIDE</b> under — hold <b>S</b> or <b>↓</b>', '<b>SLIDE</b> under — hold <b>SLIDE</b>'],
-  double: ['<b>DOUBLE JUMP</b> the gap — jump, then jump again in mid-air', '<b>DOUBLE JUMP</b> the gap — jump, then jump again in mid-air'],
+  steer: ['<b>A / D</b> or <b>← →</b> to steer', '<b>Drag left / right</b> anywhere to steer'],
+  vault: ['<b>VAULT</b> — press <b>SPACE</b> right at the unit', '<b>VAULT</b> — <b>swipe up</b> right at the unit'],
+  slide: ['<b>SLIDE</b> under — hold <b>S</b> or <b>↓</b>', '<b>SLIDE</b> under — <b>swipe down</b>'],
+  double: ['<b>DOUBLE JUMP</b> the gap — jump, then jump again in mid-air', '<b>DOUBLE JUMP</b> the gap — <b>swipe up</b>, then <b>swipe up</b> again in mid-air'],
   split: ['<b>◀ ROOFTOPS</b> wall run · fast &nbsp;|&nbsp; <b>MARKET ▶</b> street · safer', '<b>◀ ROOFTOPS</b> wall run · fast &nbsp;|&nbsp; <b>MARKET ▶</b> street · safer'],
   wall: ['Jump at the billboard and <b>steer left</b> into it', 'Jump at the billboard and <b>steer left</b> into it'],
-  wallrun: ['<b>JUMP</b> on the yellow <b>KICK</b> panel', '<b>JUMP</b> on the yellow <b>KICK</b> panel'],
-  roll: ['Long drop — tap <b>S</b> just before landing to <b>ROLL</b>', 'Long drop — tap <b>SLIDE</b> just before landing to <b>ROLL</b>'],
+  wallrun: ['<b>JUMP</b> on the yellow <b>KICK</b> panel', '<b>Swipe up</b> on the yellow <b>KICK</b> panel'],
+  roll: ['Long drop — tap <b>S</b> just before landing to <b>ROLL</b>', 'Long drop — <b>swipe down</b> just before landing to <b>ROLL</b>'],
   gap: ['<b>JUMP!</b>', '<b>JUMP!</b>'],
-  slope: ['<b>SLIDE</b> the slope — hold <b>S</b> to ride it down fast', '<b>SLIDE</b> the slope — hold <b>SLIDE</b> to ride it down fast'],
+  slope: ['<b>SLIDE</b> the slope — hold <b>S</b> to ride it down fast', '<b>SLIDE</b> the slope — <b>swipe down</b> to ride it down fast'],
   van: ['<b>JUMP</b> into the van!', '<b>JUMP</b> into the van!'],
-  ready: ['Press <b>SPACE</b> — kick through the glass', 'Tap <b>JUMP</b> — kick through the glass'],
+  ready: ['Press <b>SPACE</b> — kick through the glass', '<b>Swipe up</b> or tap — kick through the glass'],
 };
 function currentPrompt() {
   if (game.state === 'ready') return game.first ? '' : 'ready';

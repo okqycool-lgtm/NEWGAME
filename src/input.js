@@ -1,10 +1,11 @@
-// Keyboard + multi-touch input. Steering is continuous; jump/slide are edge-triggered
+// Keyboard + multi-touch input (drag to steer, flick up/down to jump/slide, plus buttons).
+// Steering is continuous; jump/slide are edge-triggered
 // with the hold state of slide exposed for long slides.
 export class Input {
   constructor() {
     this.left = false; this.right = false;
     this.touchSteer = 0; this.slideKey = false; this.slideTouch = false;
-    this.jumpQ = 0; this.slideQ = 0;
+    this.jumpQ = 0; this.slideQ = 0; this.swipeSlide = 0;
     this.touchMode = false;
     this.onAny = null;        // called on any deliberate input (unlock audio etc.)
     this.onRetry = null; this.onMute = null;
@@ -39,9 +40,12 @@ export class Input {
     if (matchMedia('(pointer: coarse)').matches) show();
     addEventListener('touchstart', show, { passive: true });
 
-    // Steering: drag anywhere on the screen. The first touch point is the centre of a
-    // virtual stick; dragging past its range slides the centre along so reversing is instant.
-    const RANGE = 46;
+    // Drag anywhere: horizontal movement steers (the first touch point is the centre of a
+    // virtual stick that slides along when you overshoot, so reversing is instant), and a
+    // quick flick up / down jumps / slides, as in a lane runner. Each flick fires once;
+    // lift or flick back the other way to re-arm, so a second flick up is the double jump.
+    const RANGE = 46, FLICK = 30;
+    const touches = new Map();
     let steerId = null, cx = 0;
     const setSteer = (e) => {
       let dx = e.clientX - cx;
@@ -50,15 +54,40 @@ export class Input {
       this.touchSteer = Math.abs(v) < 0.14 ? 0 : v;
       knob.style.transform = `translate(${cx + dx - 28}px, ${e.clientY - 28}px)`;
     };
+    const flick = (t, e) => {
+      const dy = e.clientY - t.ay, dx = e.clientX - t.ax;
+      if (t.fired) {                                   // wait for the finger to come back before re-arming
+        if (dy * t.fired < -10) { t.fired = 0; t.ay = e.clientY; t.ax = e.clientX; }
+        else if (dy * t.fired > 0) { t.ay = e.clientY; t.ax = e.clientX; }
+        return;
+      }
+      if (Math.abs(dy) >= FLICK && Math.abs(dy) > Math.abs(dx) * 1.15) {
+        if (dy < 0) { this.jumpQ++; if (t.slide) { t.slide = false; this.swipeSlide--; } }
+        else { this.slideQ++; if (!t.slide) { t.slide = true; this.swipeSlide++; } }   // keep sliding while the finger stays down
+        t.fired = Math.sign(dy); t.ay = e.clientY; t.ax = e.clientX;
+        return;
+      }
+      // slow drift (steering) must never add up to a flick: let the anchor follow lazily
+      t.ay += dy * 0.12; t.ax += dx * 0.12;
+    };
     zone.addEventListener('pointerdown', (e) => {
-      if (steerId !== null) return;
-      e.preventDefault(); steerId = e.pointerId; cx = e.clientX;
+      e.preventDefault();
       try { zone.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
+      touches.set(e.pointerId, { ax: e.clientX, ay: e.clientY, fired: 0, slide: false });
       if (e.pointerType !== 'mouse') show();
-      knob.classList.add('on'); setSteer(e); this.onAny?.();
+      if (steerId === null) { steerId = e.pointerId; cx = e.clientX; knob.classList.add('on'); setSteer(e); }
+      this.onAny?.();
     });
-    zone.addEventListener('pointermove', (e) => { if (e.pointerId === steerId) setSteer(e); });
+    zone.addEventListener('pointermove', (e) => {
+      const t = touches.get(e.pointerId);
+      if (!t) return;
+      if (e.pointerId === steerId) setSteer(e);
+      flick(t, e);
+    });
     const endSteer = (e) => {
+      const t = touches.get(e.pointerId);
+      if (t && t.slide) this.swipeSlide--;
+      touches.delete(e.pointerId);
       if (e.pointerId !== steerId) return;
       steerId = null; this.touchSteer = 0; knob.classList.remove('on');
     };
@@ -83,7 +112,7 @@ export class Input {
     const r = {
       steer: kb !== 0 ? kb : this.touchSteer,
       jump: this.jumpQ > 0, slide: this.slideQ > 0,
-      slideHeld: this.slideKey || this.slideTouch,
+      slideHeld: this.slideKey || this.slideTouch || this.swipeSlide > 0,
     };
     this.jumpQ = 0; this.slideQ = 0;
     return r;

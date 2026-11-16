@@ -46,4 +46,32 @@ const end = await st(page);
 console.log('phone steer+jump', JSON.stringify({ x0, mid, end }));
 console.log(mid.x < x0 - 0.5 && (mid.ps === 'air' || mid.ps === 'vault') ? 'PASS touch steer + jump together' : 'FAIL touch steer + jump together');
 console.log(mid.touch ? 'PASS touch controls visible' : 'FAIL touch controls hidden');
+
+// swipe gestures: flick up = jump, second flick = double jump, flick down = slide; slow drags never trigger them
+const swipe = async (x, y0, y1, steps = 4, hold = false) => {
+  await touch('touchStart', [{ x, y: y0 }]);
+  for (let i = 1; i <= steps; i++) await touch('touchMove', [{ x, y: y0 + ((y1 - y0) * i) / steps }]);
+  if (!hold) await touch('touchEnd', []);
+};
+const ev = () => page.evaluate(() => ({ ps: __ch.player.state, dj: __ch.player.usedDouble, g: __ch.player.grounded, x: +__ch.player.x.toFixed(2) }));
+const settle = async () => { for (let i = 0; i < 40; i++) { const e = await ev(); if (e.ps === 'run' && e.g) return; await page.waitForTimeout(120); } };
+await page.evaluate(() => { __ch.resetRun(true); });
+for (let i = 0; i < 60; i++) { await page.waitForTimeout(200); const e = await st(page); if (e.s === 'play' && e.ps === 'run' && e.d > 8) break; }
+await swipe(200, 500, 420);
+const j1 = await ev();
+await swipe(200, 500, 420);
+const j2 = await ev();
+console.log(j1.ps === 'air' && !j1.dj && j2.dj ? 'PASS swipe up jumps, second swipe double jumps' : 'FAIL swipe up ' + JSON.stringify({ j1, j2 }));
+await settle();
+await swipe(200, 420, 500, 4, true);
+const sl = await ev();
+await touch('touchEnd', []);
+console.log(sl.ps === 'slide' ? 'PASS swipe down slides' : 'FAIL swipe down ' + JSON.stringify(sl));
+await settle();
+// a slow diagonal steering drag (mostly sideways, drifting 40px vertically) must not jump or slide
+await touch('touchStart', [{ x: 250, y: 400 }]);
+for (let i = 1; i <= 20; i++) { await touch('touchMove', [{ x: 250 - i * 5, y: 400 - i * 2 }]); await page.waitForTimeout(15); }
+const d1 = await ev();
+await touch('touchEnd', []);
+console.log(d1.ps === 'run' && d1.x < -0.5 ? 'PASS steering drag does not trigger a jump' : 'FAIL steering drag ' + JSON.stringify(d1));
 await browser.close();
