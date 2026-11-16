@@ -25,7 +25,7 @@ const camera = new THREE.PerspectiveCamera(62, 1, 0.1, 3200);
 // ---------------------------------------------------------------- objects
 const world = buildWorld(scene, renderer);
 const gfx = new Gfx(renderer, scene, camera, (level) => world.setQuality(level));
-$('gfxbtn').textContent = 'GFX ' + gfx.label;
+$('gfxbtn').textContent = 'GFX\n' + gfx.label;
 addEventListener('resize', () => gfx.resize());
 const player = new Player();
 const runner = new Runner();
@@ -79,12 +79,13 @@ function resetRun(retry) {
 }
 
 // ---------------------------------------------------------------- HUD helpers
-const hud = { cash: -1, time: '', prompt: '', prog: -1, combo: 0 };
+const hud = { cash: -1, time: '', prompt: '', prog: -1, combo: 0, zone: '', vel: '' };
+$('cashsegs').innerHTML = '<i></i>'.repeat(L.START_CASH / L.BUNDLE);
 function restart(el, cls) { el.className = ''; void el.offsetWidth; el.className = cls; }
 function toast(text, cls) { $('toast').textContent = text; restart($('toast'), 'show ' + cls); }
 function delta(text, cls) {
   $('delta').textContent = text; restart($('delta'), 'show ' + cls);
-  restart($('cashbox'), 'chip ' + (cls === 'gain' ? 'gain' : 'hit'));
+  restart($('cashbox'), 'chip fr ' + (cls === 'gain' ? 'gain' : 'hit'));
 }
 function showBests() {
   const bc = store.get('bestCash'), bt = store.get('bestTime');
@@ -118,7 +119,20 @@ function currentPrompt() {
   return '';
 }
 function updateHud() {
-  if (game.cash !== hud.cash) { hud.cash = game.cash; $('cash').textContent = money(game.cash); }
+  if (game.cash !== hud.cash) {
+    hud.cash = game.cash; $('cash').textContent = money(game.cash);
+    const segs = $('cashsegs').children, n = Math.round(game.cash / L.BUNDLE);          // one pip per $2,500 bundle
+    for (let i = 0; i < segs.length; i++) segs[i].className = i < n ? 'on' : '';
+  }
+  const zone = game.state === 'ready' || player.d < 1 ? 'KUMO BANK' : player.d < 240 ? 'ROOFTOPS' : player.d < 440 ? (player.y < 19.5 ? 'NIGHT MARKET' : 'BILLBOARD ROW')
+    : player.d < 560 ? 'FUNNEL' : player.d < 734 ? 'SHANTY ROOFS' : game.state === 'finish' ? 'CLEAR' : 'GETAWAY ROAD';
+  if (zone !== hud.zone) { hud.zone = zone; $('zonetxt').textContent = zone; }
+  const vel = game.state === 'play' ? player.speed : 0, vtxt = vel.toFixed(1);
+  if (vtxt !== hud.vel) {
+    hud.vel = vtxt; $('vel').textContent = vtxt + ' M/S';
+    $('velfill').style.width = Math.min(100, (vel / 17.5) * 100) + '%';
+    $('velbox').classList.toggle('boost', vel > L.BASE_SPEED + 0.6);
+  }
   const t = clock(game.time);
   if (t !== hud.time) { hud.time = t; $('time').textContent = t; }
   const key = currentPrompt();
@@ -416,7 +430,7 @@ input.onRetry = (code) => {
 input.onMute = () => { sfx.setMuted(!sfx.muted); $('mute').classList.toggle('off', sfx.muted); };
 input.bindTouch({ root: $('touch'), zone: $('steerzone'), knob: $('knob'), jump: $('btn-jump'), slide: $('btn-slide') });
 $('mute').classList.toggle('off', sfx.muted);
-$('gfxbtn').addEventListener('click', () => { gfx.cycle(); $('gfxbtn').textContent = 'GFX ' + gfx.label; $('gfxbtn').blur(); });
+$('gfxbtn').addEventListener('click', () => { gfx.cycle(); $('gfxbtn').textContent = 'GFX\n' + gfx.label; $('gfxbtn').blur(); });
 $('mute').addEventListener('click', () => { sfx.unlock(); input.onMute(); $('mute').blur(); });
 $('title').addEventListener('pointerdown', (e) => { e.preventDefault(); sfx.unlock(); input.pressJump(); });
 $('retry').addEventListener('click', () => { sfx.unlock(); resetRun(true); $('retry').blur(); });
