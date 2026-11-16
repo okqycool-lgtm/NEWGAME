@@ -94,6 +94,46 @@ function skyTexture() {
   return t;
 }
 
+// Rooftop surface: a patchwork of poured slabs and tar-paper repairs, seams, stains and cracks.
+function roofTexture() {
+  const r = rng(909), cv = document.createElement('canvas'); cv.width = cv.height = 512;
+  const g = cv.getContext('2d');
+  g.fillStyle = '#8b8391'; g.fillRect(0, 0, 512, 512);
+  const tones = ['#8b8391', '#7c7484', '#968d99', '#857b8a', '#746c7e', '#9a8f97', '#807889'];
+  const cell = (x, y, w, h, depth) => {                              // recursive uneven split into slabs
+    if (depth > 0 && (w > 150 || h > 150 || (r() < 0.62 && w > 56 && h > 56))) {
+      if (w > h) { const k = Math.round(w * (0.35 + r() * 0.3)); cell(x, y, k, h, depth - 1); cell(x + k, y, w - k, h, depth - 1); }
+      else { const k = Math.round(h * (0.35 + r() * 0.3)); cell(x, y, w, k, depth - 1); cell(x, y + k, w, h - k, depth - 1); }
+      return;
+    }
+    g.fillStyle = tones[Math.floor(r() * tones.length)]; g.fillRect(x, y, w, h);
+    if (r() < 0.2) { g.fillStyle = 'rgba(40,34,48,0.35)'; g.fillRect(x, y, w, h); }                  // tar-paper patch
+    g.strokeStyle = 'rgba(38,30,46,0.75)'; g.lineWidth = 2.5; g.strokeRect(x + 1, y + 1, w - 2, h - 2);
+    g.strokeStyle = 'rgba(255,240,235,0.10)'; g.lineWidth = 1; g.strokeRect(x + 3.5, y + 3.5, w - 7, h - 7);
+  };
+  cell(0, 0, 512, 512, 6);
+  for (let i = 0; i < 2600; i++) { g.fillStyle = r() < 0.5 ? 'rgba(255,245,240,0.07)' : 'rgba(20,12,28,0.10)'; g.fillRect(r() * 512, r() * 512, 1 + r() * 2.5, 1 + r() * 2.5); }
+  for (let i = 0; i < 26; i++) {                                    // stains and scuffs
+    const x = r() * 512, y = r() * 512, rad = 12 + r() * 40, gr = g.createRadialGradient(x, y, 1, x, y, rad);
+    gr.addColorStop(0, `rgba(30,20,38,${0.18 + r() * 0.2})`); gr.addColorStop(1, 'rgba(30,20,38,0)');
+    g.fillStyle = gr; g.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+  }
+  g.strokeStyle = 'rgba(30,22,38,0.55)'; g.lineWidth = 1.2;
+  for (let i = 0; i < 9; i++) { let x = r() * 512, y = r() * 512; g.beginPath(); g.moveTo(x, y); for (let k = 0; k < 7; k++) { x += (r() - 0.5) * 50; y += (r() - 0.5) * 50; g.lineTo(x, y); } g.stroke(); }
+  for (let i = 0; i < 14; i++) { g.fillStyle = `rgba(214,176,60,${0.25 + r() * 0.35})`; g.fillRect(r() * 512, r() * 512, 3 + r() * 14, 2 + r() * 5); }   // old paint flecks
+  const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  return t;
+}
+
+// Chain-link mesh for rooftop fences.
+function fenceTexture() {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 64;
+  const g = cv.getContext('2d'); g.strokeStyle = '#b9b2bd'; g.lineWidth = 3.2;
+  for (let i = -64; i < 128; i += 16) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i + 64, 64); g.stroke(); g.beginPath(); g.moveTo(i + 64, 0); g.lineTo(i, 64); g.stroke(); }
+  const t = new THREE.CanvasTexture(cv); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
 // Warm pool of light under a wall lamp.
 function lampTexture() {
   const cv = document.createElement('canvas'); cv.width = cv.height = 128;
@@ -191,7 +231,7 @@ class Batch {
     for (const { key, material, list } of this.groups.values()) {
       const mesh = new THREE.Mesh(mergeGeometries(list, false), material);
       mesh.matrixAutoUpdate = false;
-      mesh.castShadow = key !== 'glow' && key !== 'cone'; mesh.receiveShadow = mesh.castShadow;
+      mesh.castShadow = key !== 'glow' && key !== 'cone' && key !== 'fence'; mesh.receiveShadow = mesh.castShadow;
       this.meshes.push({ key, mesh });
       this.scene.add(mesh);
       list.forEach((g) => g.dispose());
@@ -205,7 +245,10 @@ export function buildWorld(scene, renderer) {
   const B = new Batch(scene);
   const lamMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
   const litMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.72, metalness: 0.12 });
-  const wetMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, roughnessMap: puddleTexture(), metalness: 0.35, envMapIntensity: 1.5 });
+  const roofMap = roofTexture();
+  const wetMat = new THREE.MeshStandardMaterial({ vertexColors: true, map: roofMap, roughness: 1, roughnessMap: puddleTexture(), metalness: 0.3, envMapIntensity: 1.6 });
+  const wetLam = new THREE.MeshLambertMaterial({ vertexColors: true, map: roofMap });
+  const fenceMat = new THREE.MeshLambertMaterial({ map: fenceTexture(), alphaTest: 0.45, side: THREE.DoubleSide, emissive: 0x3a3440 });
   const glowMat = new THREE.MeshBasicMaterial({ vertexColors: true });
   const winMats = [
     windowTexture(['#ffc978', '#ffb060', '#ffe2a6', '#ff9a5a', '#9fe6ff'], 11, '#5d5269', 0.3, 5),              // concrete offices
@@ -232,7 +275,7 @@ export function buildWorld(scene, renderer) {
     const g = new THREE.BoxGeometry(x1 - x0, y1 - y0, d1 - d0);
     g.translate((x0 + x1) / 2, (y0 + y1) / 2, -(d0 + d1) / 2);
     const p = g.attributes.position, uv = g.attributes.uv;
-    for (let i = 0; i < p.count; i++) uv.setXY(i, p.getX(i) / 11, p.getZ(i) / 11);
+    for (let i = 0; i < p.count; i++) uv.setXY(i, p.getX(i) / 9, p.getZ(i) / 9);
     B.push('wet', wetMat, tint(g, color), (d0 + d1) / 2);
   };
   const boxR = (color, w, h, dp, x, y, d, rx = 0, ry = 0, rz = 0, isGlow = false) => {
@@ -341,7 +384,7 @@ export function buildWorld(scene, renderer) {
   // ---------------------------------------------------------------- bank
   {
     const F = 34, Ct = 40.5;
-    slab(0x34314a, -9, 9, 33.4, F, -60, 0.6);
+    slab(0x8f88a8, -9, 9, 33.4, F, -60, 0.6);
     box(0x1d1b2b, -9.4, 9.4, Ct, 41, -60, 0);
     for (const sx of [-1, 1]) {
       box(0x3b3654, sx * 9.4 - 0.2, sx * 9.4 + 0.2, F, Ct, -60, 0);
@@ -389,31 +432,36 @@ export function buildWorld(scene, renderer) {
   }
 
   // ---------------------------------------------------------------- route structures
-  const ROOF = 0x6f6878, EDGE = 0x544c5e;
+  const ROOF = 0x6f6878, EDGE = 0x544c5e, MARGIN = 2.4;
   for (const c of colliders) {
     const { x0, x1, d0, d1 } = c, top = c.y1;
     switch (c.style) {
       case 'roof': {
-        winBox(c.win ?? 0, x0 + 0.3, x1 - 0.3, 0, top - 0.5, d0 + 0.3, d1 - 0.3);
-        slab(c.shanty ? 0x7a6470 : ROOF, x0, x1, top - 0.5, top, d0, d1);
-        // concrete slab seams + patched panels so it reads as a roof, not a runway
-        for (let x = x0 + 3; x < x1 - 1; x += 3) box(0x4a4352, x - 0.04, x + 0.04, top, top + 0.012, d0 + 0.6, d1 - 0.4);
-        for (let d = d0 + 5; d < d1 - 6; d += 9 + R() * 8) {
-          const px = x0 + 1 + R() * (x1 - x0 - 4), pw = 1.2 + R() * 1.6;
-          box([0x7d7686, 0x5f5868, 0x867a84, 0x665f72][Math.floor(R() * 4)], px, px + pw, top, top + 0.01, d, d + 1.5 + R() * 2.5);
-        }
-        for (let d = Math.ceil(d0 / 12) * 12 + 6; d < d1 - 2; d += 12) box(0x4a4352, x0 + 0.3, x1 - 0.3, top, top + 0.012, d, d + 0.08);
-        if (!c.noLip) {                                           // reachable ledge = accent
-          // worn yellow paint on the ledge: flaking in patches, still unmistakable
-          box(0x8a7a52, x0, x1, top - 0.5, top + 0.015, d0 - 0.05, d0 + 0.5);
-          for (let x = x0; x < x1; ) { const w = 0.5 + R() * 2.2; glow(ACCENT, x, Math.min(x1, x + w), top - 0.5 + R() * 0.12, top + 0.02, d0 - 0.06, d0 + 0.34 + R() * 0.18); x += w + 0.08 + R() * 0.35; }
-        }
-        box(0xd8d2c8, x0, x1, top, top + 0.02, d1 - 0.3, d1 - 0.14);
         const open = x1 === -4;                                   // rooftop line: right side opens onto the market
-        if (!open) for (const [xa, xb] of [[x0 - 0.3, x0], [x1, x1 + 0.3]]) {
-          box(EDGE, xa, xb, top - 0.5, top + 0.4, d0, d1);
-          box(0x8a8290, xa - 0.04, xb + 0.04, top + 0.4, top + 0.47, d0, d1);                       // capping stones
-          cyl(0x9a8478, 0.11, d1 - d0 - 1, (xa + xb) / 2 + (xa < x0 ? -0.34 : 0.34), top + 0.12, (d0 + d1) / 2, 'z');   // service pipe
+        const m = open || c.noLip ? 0 : MARGIN, md1 = d0 === 161 ? 236 : d1;   // furnished service strip beside the lane
+        winBox(c.win ?? 0, x0 + 0.3 - m, x1 - 0.3 + m, 0, top - 0.5, d0 + 0.3, d1 - 0.3);
+        slab(c.shanty ? 0xf2dcdc : 0xe8e0ea, x0, x1, top - 0.5, top, d0, d1);
+        if (!c.noLip) {                                           // reachable ledge = accent
+          // a proper concrete kerb with worn yellow paint: flaking in patches, still unmistakable
+          box(0x9a8f86, x0 - m, x1 + m, top - 0.62, top + 0.02, d0 - 0.16, d0 + 0.5);
+          for (let x = x0 - m; x < x1 + m; ) { const w = 0.5 + R() * 2.2; glow(ACCENT, x, Math.min(x1 + m, x + w), top - 0.56 + R() * 0.14, top + 0.03, d0 - 0.18, d0 + 0.32 + R() * 0.2); x += w + 0.08 + R() * 0.35; }
+          // the wall below the kerb: louvred vents and a downpipe
+          for (const vx of [x0 + 1.2, x1 - 3.4]) { box(0x3a3440, vx, vx + 2.2, top - 2.6, top - 1.7, d0 + 0.2, d0 + 0.3); for (let y = top - 2.5; y < top - 1.75; y += 0.16) box(0x8a8290, vx + 0.08, vx + 2.12, y, y + 0.06, d0 + 0.17, d0 + 0.3); }
+          cyl(0x9a8478, 0.12, 9, (x0 + x1) / 2 + 2.2, top - 5.1, d0 + 0.14); box(0x9a8478, (x0 + x1) / 2 + 2.04, (x0 + x1) / 2 + 2.36, top - 0.9, top - 0.6, d0 + 0.02, d0 + 0.3);
+        }
+        box(0xd8d2c8, x0, x1, top, top + 0.015, d1 - 0.3, d1 - 0.16);
+        if (m) for (const sx of [-1, 1]) {
+          const xin = sx < 0 ? x0 : x1, xout = xin + sx * m;
+          slab(0xcfc6d2, Math.min(xin, xout), Math.max(xin, xout), top - 0.5, top - 0.02, d0, md1);       // strip sits a touch lower
+          const pa = sx < 0 ? xout - 0.55 : xout, pb = pa + 0.55;                                          // parapet
+          box(0x857c8a, pa, pb, top - 0.5, top + 0.62, d0, md1);
+          box(0xa39aa6, pa - 0.06, pb + 0.06, top + 0.62, top + 0.72, d0, md1);
+          for (let d = d0 + R() * 3; d < md1 - 2; d += 2.5 + R() * 6) box(0xc0a044, pa - 0.065, pb + 0.065, top + 0.722, top + 0.735, d, Math.min(md1, d + 0.6 + R() * 2.4));   // faded paint remnants
+          // pipe run marking the lane edge, with flanges and the odd valve
+          const px = xin + sx * 0.2, len = md1 - d0 - 0.6, mid = (d0 + md1) / 2;
+          cyl(0xa08a7c, 0.13, len, px, top + 0.15, mid, 'z'); cyl(0x8d8590, 0.09, len, px + sx * 0.3, top + 0.1, mid, 'z');
+          for (let d = d0 + 2; d < md1 - 1; d += 4) { cyl(0x6f6672, 0.19, 0.12, px, top + 0.15, d, 'z'); box(0x6f6672, px - 0.09, px + 0.4 * 1 - 0.09 + (sx < 0 ? -0.31 : 0), top - 0.02, top + 0.04, d + 1.9, d + 2.1); }
+          for (let d = d0 + 9 + R() * 6; d < md1 - 4; d += 17 + R() * 9) { box(0x6f6672, px - 0.05, px + 0.05, top + 0.15, top + 0.5, d - 0.05, d + 0.05); cyl(0xc0413a, 0.17, 0.05, px, top + 0.52, d, 'y', false, 8); }
         }
         break;
       }
@@ -471,7 +519,7 @@ export function buildWorld(scene, renderer) {
       }
       case 'market': {
         box(0x161222, x0, x1, 0, top - 0.3, d0, d1);
-        slab(0x5e5466, x0, x1, top - 0.3, top, d0, d1);
+        slab(0xcbbfd0, x0, x1, top - 0.3, top, d0, d1);
         for (let d = d0 + 4; d < d1; d += 8) glow(0x5a2a80, x0 + 0.4, x1 - 0.4, top, top + 0.015, d, d + 0.1);
         glow(MAGENTA, x0 + 0.05, x0 + 0.12, top, top + 0.03, d0, d1);
         glow(CYAN, x1 - 0.12, x1 - 0.05, top, top + 0.03, d0, d1);
@@ -500,11 +548,15 @@ export function buildWorld(scene, renderer) {
           box(0x1a1528, x0, x1, 0, c.yB - 0.3, d0 + 0.4, d1);
           break;
         }
-        boxR(0x6a6272, x1 - x0, 0.4, len, (x0 + x1) / 2, cy - 0.22, cd, ang);
+        boxR(0x8a8290, x1 - x0, 0.4, len, (x0 + x1) / 2, cy - 0.22, cd, ang);
+        for (const x of [x0 - 0.2, x1 + 0.2]) boxR(0x6f6672, 0.4, 0.75, len, x, cy - 0.05, cd, ang);            // side kerbs
         for (let k = 0.08; k < 1; k += 0.14) {
-          boxR(0x5a2a80, x1 - x0 - 1, 0.03, 0.14, (x0 + x1) / 2, c.yA + (c.yB - c.yA) * k + 0.0, d0 + (d1 - d0) * k, ang, 0, 0, true);
+          boxR(0x4a4352, x1 - x0 - 0.6, 0.03, 0.12, (x0 + x1) / 2, c.yA + (c.yB - c.yA) * k + 0.0, d0 + (d1 - d0) * k, ang);
         }
-        for (const x of [x0 + 0.1, x1 - 0.1]) boxR(CYAN, 0.08, 0.08, len, x, cy + 0.02, cd, ang, 0, 0, true);
+        for (const x of [x0 + 0.12, x1 - 0.12]) {                                   // worn yellow handrails
+          boxR(0xd2aa32, 0.09, 0.09, len, x, cy + 1.05, cd, ang); boxR(0xb8942c, 0.07, 0.07, len, x, cy + 0.55, cd, ang);
+          for (let d = d0 + 0.3; d <= d1; d += 3) { const y = c.yA + (c.yB - c.yA) * ((d - d0) / (d1 - d0)); box(0xd2aa32, x - 0.05, x + 0.05, y, y + 1.05, d - 0.05, d + 0.05); }
+        }
         for (let d = d0 + 3; d < d1; d += 8) for (const x of [x0 + 0.4, x1 - 0.4]) {
           const y = c.yA + (c.yB - c.yA) * ((d - d0) / (d1 - d0));
           box(0x1a1528, x - 0.15, x + 0.15, 0, y - 0.3, d - 0.15, d + 0.15);
@@ -513,7 +565,7 @@ export function buildWorld(scene, renderer) {
       }
       case 'plaza': {
         box(0x161222, x0, x1, 0, top - 0.4, d0, d1);
-        slab(0x6a6272, x0, x1, top - 0.4, top, d0, d1);
+        slab(0xdcd4de, x0, x1, top - 0.4, top, d0, d1);
         if (d0 === 440) {
           glow(ACCENT, -13, -4, top - 0.4, top + 0.02, 419.95, 420.5);
           for (const [xa, xb] of [[-13, -6], [12, 6]]) {                                   // funnel rails
@@ -528,7 +580,7 @@ export function buildWorld(scene, renderer) {
         break;
       }
       case 'road': {
-        slab(0x181624, -40, 40, -2, 0, d0, d1);
+        slab(0x56505e, -40, 40, -2, 0, d0, d1);
         for (let d = d0; d < d1; d += 6) glow(0xe8e8f0, -0.08, 0.08, 0, 0.012, d, d + 2.6);
         for (const sx of [-1, 1]) {
           box(0x3a3d52, sx * 2.25 - 0.2, sx * 2.25 + 0.2, 0, 0.7, d0, d1);
@@ -640,9 +692,15 @@ export function buildWorld(scene, renderer) {
       }
       case 'shutter':
       case 'pipes': {
-        for (const x of [x0 - 0.2, x1 + 0.2]) box(0x23202e, x - 0.2, x + 0.2, b, b + 3.7, d0 - 0.05, d1 + 0.05);
-        box(0x23202e, x0 - 0.4, x1 + 0.4, b + 3.1, b + 3.7, d0 - 0.1, d1 + 0.1);
-        if (c.style === 'shutter') {
+        const roofDuct = c.style === 'shutter' && b !== 14;
+        for (const x of [x0 - 0.2, x1 + 0.2]) box(roofDuct ? 0x6f6672 : 0x23202e, x - 0.2, x + 0.2, b, b + (roofDuct ? 2.5 : 3.7), d0 - 0.05, d1 + 0.05);
+        if (!roofDuct) box(0x23202e, x0 - 0.4, x1 + 0.4, b + 3.1, b + 3.7, d0 - 0.1, d1 + 0.1);
+        if (c.style === 'shutter' && b !== 14) {
+          box(0xb9b4bc, x0 - 0.4, x1 + 0.4, b + 1.32, b + 2.5, d0 - 0.3, d1 + 0.45);                 // the duct itself
+          for (let x = x0; x < x1 + 0.2; x += 1.5) box(0x8d8590, x - 0.06, x + 0.06, b + 1.28, b + 2.54, d0 - 0.34, d1 + 0.49);   // flange ribs
+          box(0x3a3440, x0 + 1, x0 + 2.6, b + 1.6, b + 2.2, d0 - 0.33, d0 - 0.3); for (let y = b + 1.66; y < b + 2.2; y += 0.13) box(0x8d8590, x0 + 1.05, x0 + 2.55, y, y + 0.05, d0 - 0.35, d0 - 0.3);
+          cyl(0xa08a7c, 0.12, x1 - x0 + 0.8, (x0 + x1) / 2, b + 2.66, d0 + 0.1, 'x'); cyl(0x8d8590, 0.08, x1 - x0 + 0.8, (x0 + x1) / 2, b + 2.62, d0 + 0.45, 'x');
+        } else if (c.style === 'shutter') {
           box(0x565b78, x0, x1, b + 1.3, b + 3.1, d0 + 0.15, d0 + 0.3);
           for (let y = b + 1.5; y < b + 3.1; y += 0.3) box(0x3d4159, x0, x1, y, y + 0.06, d0 + 0.1, d0 + 0.15);
         } else {
@@ -874,7 +932,7 @@ export function buildWorld(scene, renderer) {
       const half = d > 160 && d < 240 ? 12 : 6;
       const h = Math.max(0, routeTop - 10 - R() * 5);
       if (h > 2 && d > 4) for (const sx of [-1, 1]) {
-        const xa = half + 6.5, xb = 22;
+        const xa = half + 9, xb = 24;
         if (R() < 0.8) { TINT = TINTS[Math.floor(R() * TINTS.length)]; winBox([2, 4, 0][Math.floor(R() * 3)], sx > 0 ? xa : -xb, sx > 0 ? xb : -xa, 0, h, d + 1, d + len - 4); TINT = 0xffffff; }
       }
     }
@@ -959,9 +1017,9 @@ export function buildWorld(scene, renderer) {
     if (R() < 0.6) dish(x + 0.6, yy, d + 0.8, 0.55);
   };
   const terrace = (sx, half, top, d0, d1, w = 5.5) => {
-    const xa = sx > 0 ? half + 0.3 : -half - 0.3 - w, xb = xa + w, cx = (xa + xb) / 2;
+    const off = MARGIN + 0.9, xa = sx > 0 ? half + off : -half - off - w, xb = xa + w, cx = (xa + xb) / 2;
     winBox(Math.floor(R() * 3), xa + 0.2, xb - 0.2, 0, top - 0.7, d0 + 0.6, d1 - 0.6);
-    slab(0x645c6c, xa, xb, top - 0.7, top - 0.3, d0 + 0.4, d1 - 0.4);
+    slab(0xc4bac8, xa, xb, top - 0.7, top - 0.3, d0 + 0.4, d1 - 0.4);
     box(0x1b1730, sx > 0 ? xb - 0.25 : xa, sx > 0 ? xb : xa + 0.25, top - 0.3, top + 0.3, d0 + 0.4, d1 - 0.4);
     const y = top - 0.3;
     let prev = -1;
@@ -985,6 +1043,70 @@ export function buildWorld(scene, renderer) {
       boxR(0x0b0b12, 0.03, 0.03, 6.1, px, y + 3.3, d + 3, 0.1); boxR(0x0b0b12, 0.03, 0.03, 6.1, px, y + 3.3, d + 9, -0.1);
     }
   };
+  // Furniture for the service strip between the lane and the parapet. Nothing here collides.
+  const SILVER = 0xb9b4bc, PALE = 0xc9c3c4;
+  const strip = (sx, half, top, d0, d1) => {
+    const xin = sx * (half + 0.55), xout = sx * (half + MARGIN - 0.6), cx = (xin + xout) / 2, y = top - 0.02;
+    const wallFace = sx < 0 ? 'left' : 'right';                       // which way things on this side face
+    let prev = -1;
+    for (let d = d0 + 2.5; d < d1 - 5; ) {
+      let k = Math.floor(R() * 9); if (k === prev) k = (k + 1) % 9; prev = k;
+      if (k === 0) {                                                  // pair of condensers on a pallet
+        for (const od of [0, 2.1]) {
+          box(PALE, cx - 0.55, cx + 0.55, y + 0.1, y + 1.25, d + od, d + od + 1.8); box(0x6e6672, cx - 0.5, cx + 0.5, y, y + 0.1, d + od + 0.1, d + od + 1.7);
+          for (const fd of [0.5, 1.3]) { cyl(0x3a3440, 0.33, 0.05, cx - sx * 0.56, y + 0.7, d + od + fd, 'x', false, 12); cyl(0xa9a2a6, 0.1, 0.07, cx - sx * 0.57, y + 0.7, d + od + fd, 'x', false, 8); }
+        }
+        cyl(0xa08a7c, 0.07, 4, cx + sx * 0.5, y + 0.25, d + 2, 'z'); d += 5.6;
+      } else if (k === 1) {                                           // galvanised duct: riser, elbow, long run
+        box(SILVER, cx - 0.45, cx + 0.45, y, y + 2.5, d, d + 0.9); box(SILVER, cx - 0.45, cx + 0.45, y + 1.6, y + 2.5, d, d + 5.2);
+        for (let dd = d + 1.2; dd < d + 5.2; dd += 1) box(0x8d8590, cx - 0.5, cx + 0.5, y + 1.55, y + 2.55, dd - 0.04, dd + 0.04);
+        for (const yy of [0.7, 1.4]) box(0x8d8590, cx - 0.5, cx + 0.5, y + yy, y + yy + 0.08, d - 0.05, d + 0.95);
+        box(0x3a3440, cx - 0.36, cx + 0.36, y + 1.72, y + 2.38, d + 5.2, d + 5.24);
+        for (const dd of [d + 2.4, d + 4.4]) box(0x6f6672, cx - 0.06, cx + 0.06, y, y + 1.6, dd - 0.06, dd + 0.06); d += 6.6;
+      } else if (k === 2) {                                           // electrical cabinets
+        for (const od of [0, 1.3]) {
+          box(0x7d8a84, cx + sx * 0.1 - 0.35, cx + sx * 0.1 + 0.35, y + 0.12, y + 1.55, d + od, d + od + 1.1);
+          box(0x4f5a56, cx - sx * 0.26 - 0.01, cx - sx * 0.26 + 0.01, y + 0.2, y + 1.47, d + od + 0.5, d + od + 0.56);
+          glow(od ? 0x6dff8a : 0xff4a3a, cx - sx * 0.27 - 0.02, cx - sx * 0.27 + 0.02, y + 1.25, y + 1.33, d + od + 0.15, d + od + 0.23);
+        }
+        cyl(0x8d8590, 0.05, 1.4, cx + sx * 0.3, y + 0.85, d + 2.55, 'y'); d += 4;
+      } else if (k === 3) {                                           // roof-access hut: door, lamp, tin awning
+        const hx0 = Math.min(xin + sx * 0.25, xout), hx1 = Math.max(xin + sx * 0.25, xout), face = sx < 0 ? hx1 : hx0;
+        box(0x8f8690, hx0, hx1, y, y + 2.7, d, d + 2.8); box(0x7a727e, hx0 - 0.12, hx1 + 0.12, y + 2.7, y + 2.86, d - 0.12, d + 2.92);
+        const fo = -sx * 0.03;
+        box(0x5a4d52, Math.min(face, face + fo), Math.max(face, face + fo), y + 0.05, y + 2.05, d + 0.9, d + 1.9);
+        glow(0xffd28a, Math.min(face, face + fo * 1.3), Math.max(face, face + fo * 1.3), y + 1.25, y + 1.75, d + 1.25, d + 1.55);
+        boxR(SHEETS[Math.floor(R() * 3)], 1.3, 0.06, 2.3, face - sx * 0.6, y + 2.42, d + 1.4, 0, 0, sx * 0.32);
+        lamp(face, y + 2.36, d + 1.4, wallFace, 2.3); d += 4.2;
+      } else if (k === 4) {                                           // chain-link fence run along the parapet
+        const len = 5 + Math.floor(R() * 3) * 1.5, fx = xout - sx * 0.1;
+        for (let dd = d; dd <= d + len + 0.01; dd += 2.5) box(0x8d8590, fx - 0.05, fx + 0.05, y, y + 2.3, dd - 0.05, dd + 0.05);
+        box(0x8d8590, fx - 0.04, fx + 0.04, y + 2.26, y + 2.34, d, d + len);
+        const fg = new THREE.PlaneGeometry(len, 2.2), uv = fg.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * len * 2, uv.getY(i) * 4.4);
+        fg.rotateY(Math.PI / 2); fg.translate(fx, y + 1.15, -(d + len / 2)); B.push('fence', fenceMat, fg, d);
+        d += len + 1;
+      } else if (k === 5) {                                           // mushroom vents and a louvred box
+        for (const od of [0, 1.2]) { cyl(SILVER, 0.2, 0.8, cx, y + 0.4, d + od + 0.4, 'y', false, 8); cyl(0x8d8590, 0.42, 0.2, cx, y + 0.9, d + od + 0.4, 'y', false, 10); }
+        box(SILVER, cx - 0.5, cx + 0.5, y, y + 0.9, d + 2.3, d + 3.4); for (let yy = y + 0.15; yy < y + 0.8; yy += 0.16) box(0x6f6672, cx - sx * 0.5 - 0.02, cx - sx * 0.5 + 0.02, yy, yy + 0.07, d + 2.4, d + 3.3);
+        d += 4.6;
+      } else if (k === 6) {                                           // dish and mast on a railed plinth
+        box(0x857c8a, cx - 0.7, cx + 0.7, y, y + 0.7, d, d + 2.6);
+        for (const [ox, od] of [[-0.65, 0.05], [0.65, 0.05], [-0.65, 2.55], [0.65, 2.55]]) box(0x3a3440, cx + ox - 0.03, cx + ox + 0.03, y + 0.7, y + 1.5, d + od - 0.03, d + od + 0.03);
+        box(0x3a3440, cx - 0.68, cx + 0.68, y + 1.46, y + 1.52, d + 0.02, d + 0.08); box(0x3a3440, cx - 0.68, cx + 0.68, y + 1.46, y + 1.52, d + 2.52, d + 2.58);
+        dish(cx, y + 0.7, d + 0.8, 0.6); antenna(cx, y + 0.7, d + 1.9, 4 + R() * 2); d += 4;
+      } else if (k === 7) {                                           // tin lean-to over stacked crates
+        for (const [ox, od] of [[-0.6, 0.1], [0.6, 0.1], [-0.6, 3.1], [0.6, 3.1]]) box(0x6a5a52, cx + ox - 0.05, cx + ox + 0.05, y, y + 2.0 + (ox * sx > 0 ? 0.35 : 0), d + od - 0.05, d + od + 0.05);
+        boxR(SHEETS[Math.floor(R() * 5)], 1.7, 0.06, 3.5, cx, y + 2.22, d + 1.6, 0, 0, sx * 0.28);
+        box(0x8a6a52, cx - 0.4, cx + 0.4, y, y + 0.7, d + 0.5, d + 1.3); box(0x74584a, cx - 0.35, cx + 0.35, y + 0.7, y + 1.3, d + 0.55, d + 1.2); box(0x5d7fa0, cx - 0.4, cx + 0.4, y, y + 0.6, d + 1.6, d + 2.5);
+        d += 4.6;
+      } else {                                                        // pipes climbing over the parapet
+        for (const od of [0, 0.35, 0.7]) { cyl(0xa08a7c, 0.09, 1.1 + od, xout - sx * (0.55 + od / 2), y + 0.12 + od * 0.25, d + od, 'x'); cyl(0xa08a7c, 0.09, 0.9, xout - sx * 0.05, y + 0.55, d + od, 'y'); }
+        box(0x7d8a84, cx - 0.3, cx + 0.3, y, y + 0.9, d + 1.5, d + 2.2); d += 3.4;
+      }
+      d += 1 + R() * 3;
+    }
+  };
+  for (const [half, top, d0, d1] of [[6, 28, 1, 80], [6, 26, 80, 150], [12, 26, 161, 236], [6, 12, 472, 560], [6, 21, 580, 612], [6, 13, 655, 700], [6, 8, 570 + S, 622 + S]]) { strip(-1, half, top, d0, d1); strip(1, half, top, d0, d1); }
   for (const [half, top, d0, d1] of [[6, 28, 1, 80], [6, 26, 80, 150], [12, 26, 161, 236], [6, 12, 472, 560], [6, 21, 580, 612], [6, 13, 655, 700], [6, 8, 570 + S, 622 + S]]) {
     terrace(-1, half, top, d0, d1); terrace(1, half, top, d0, d1);
   }
@@ -1101,7 +1223,7 @@ export function buildWorld(scene, renderer) {
       // only High pays for physically based shading everywhere; Med keeps just the wet roofs
       for (const { key: k, mesh } of B.meshes) {
         if (k === 'lit') mesh.material = level === 'high' ? litMat : lamMat;
-        else if (k === 'wet') mesh.material = low ? lamMat : wetMat;
+        else if (k === 'wet') mesh.material = low ? wetLam : wetMat;
       }
       key.castShadow = level === 'high';
       hemi.intensity = low ? 1.6 : 1.25; key.intensity = low ? 2.2 : 2.6;
