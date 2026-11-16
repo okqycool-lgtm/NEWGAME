@@ -28,15 +28,18 @@ const touch = (type, pts) => cdp.send('Input.dispatchTouchEvent', { type, touchP
 await touch('touchStart', [{ x: 200, y: 300 }]); await touch('touchEnd', []);
 let s; for (let i = 0; i < 40; i++) { await page.waitForTimeout(250); s = await st(page); if (s.s === 'play' && s.ps === 'run' && s.d > 8) break; }
 console.log('phone after tap', JSON.stringify(s));
-const steer = await box('#steer'), jump = await box('#btn-jump');
+const jump = await box('#btn-jump');
 const x0 = s.x;
-await touch('touchStart', [{ x: steer.x - steer.w * 0.35, y: steer.y }]);                                   // thumb 1: steer left
+// thumb 1: swipe left starting from an arbitrary spot in the middle of the screen
+await touch('touchStart', [{ x: 220, y: 380 }]);
+await touch('touchMove', [{ x: 150, y: 385 }]);
 await page.waitForTimeout(500);
-await touch('touchStart', [{ x: steer.x - steer.w * 0.35, y: steer.y }, { x: jump.x, y: jump.y }]);            // thumb 2: jump while steering
+await touch('touchMove', [{ x: 150, y: 385 }, { x: jump.x, y: jump.y }]);            // thumb 2: jump while steering
+await touch('touchStart', [{ x: 150, y: 385 }, { x: jump.x, y: jump.y }]);
 await page.waitForTimeout(200);
 const mid = await st(page);
 await page.screenshot({ path: 'tests/shots/phone-play.png' });
-await touch('touchEnd', [{ x: steer.x - steer.w * 0.35, y: steer.y }]);
+await touch('touchEnd', [{ x: 150, y: 385 }]);
 await page.waitForTimeout(300);
 await touch('touchEnd', []);
 const end = await st(page);

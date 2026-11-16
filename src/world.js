@@ -17,32 +17,51 @@ function rng(seed) {
 }
 
 // ------------------------------------------------------------------ textures
-function windowTexture(lit, seed) {
-  const r = rng(seed), cv = document.createElement('canvas'), W = 64, H = 96;
-  cv.width = W * 6; cv.height = H * 4;
+// Facades: dark stained concrete with irregular clusters of lit windows (runs, stacks, dark floors),
+// rather than an even grid. 12 x 8 windows per tile so the pattern doesn't visibly repeat.
+function windowTexture(lit, seed, wall = '#141b21', density = 0.24, maxRun = 5) {
+  const r = rng(seed), cv = document.createElement('canvas'), W = 40, H = 60, COLS = 12, ROWS = 8;
+  cv.width = W * COLS; cv.height = H * ROWS;
   const g = cv.getContext('2d');
-  g.fillStyle = '#15102a'; g.fillRect(0, 0, cv.width, cv.height);
-  for (let i = 0; i < 90; i++) { g.fillStyle = `rgba(${r() < 0.5 ? '60,40,110' : '0,0,0'},${0.05 + r() * 0.12})`; g.fillRect(r() * cv.width, r() * cv.height, 4 + r() * 50, 2 + r() * 30); }
-  for (let row = 0; row < 4; row++) for (let col = 0; col < 6; col++) {
-    const x = col * W + 12, y = row * H + 18, w = 40, h = 58, on = r() < 0.3;
-    g.fillStyle = '#0b0818'; g.fillRect(x - 3, y - 3, w + 6, h + 6);                 // recessed frame
-    if (on) {
-      const c = lit[Math.floor(r() * lit.length)], gr = g.createLinearGradient(0, y, 0, y + h);
-      gr.addColorStop(0, c); gr.addColorStop(1, '#ffffff');
-      g.fillStyle = c; g.fillRect(x, y, w, h);
-      g.globalAlpha = 0.18; g.fillStyle = gr; g.fillRect(x, y, w, h); g.globalAlpha = 1;
-      const k = r();
-      if (k < 0.35) { g.fillStyle = 'rgba(10,6,24,0.55)'; const bh = 10 + r() * 34; g.fillRect(x, y, w, bh); for (let yy = y + 3; yy < y + bh; yy += 5) { g.fillStyle = 'rgba(0,0,0,0.3)'; g.fillRect(x, yy, w, 1); } }   // blinds
-      else if (k < 0.5) { g.fillStyle = 'rgba(8,4,20,0.8)'; const px = x + 8 + r() * 20; g.fillRect(px, y + h - 24, 10, 24); g.beginPath(); g.arc(px + 5, y + h - 29, 5, 0, 7); g.fill(); }   // someone home
-      else if (k < 0.62) { g.fillStyle = 'rgba(8,4,20,0.6)'; g.fillRect(x + 22 + r() * 8, y + h - 14, 12, 14); }
-    } else {
-      g.fillStyle = '#1e1738'; g.fillRect(x, y, w, h);
-      g.fillStyle = 'rgba(120,110,200,0.10)'; g.beginPath(); g.moveTo(x, y + h); g.lineTo(x + 16, y); g.lineTo(x + 26, y); g.lineTo(x + 10, y + h); g.fill();   // dull reflection
-    }
-    g.fillStyle = '#0b0818'; g.fillRect(x + w / 2 - 1, y, 2, h); g.fillRect(x, y + h * 0.42, w, 2);
-    if (r() < 0.12) { g.fillStyle = '#2c2748'; g.fillRect(x + 6, y + h + 5, 22, 10); }   // wall AC
+  g.fillStyle = wall; g.fillRect(0, 0, cv.width, cv.height);
+  for (let i = 0; i < 160; i++) {                                   // blotchy concrete
+    g.fillStyle = r() < 0.5 ? `rgba(255,255,255,${0.012 + r() * 0.03})` : `rgba(0,0,0,${0.05 + r() * 0.14})`;
+    g.fillRect(r() * cv.width, r() * cv.height, 6 + r() * 70, 4 + r() * 40);
   }
-  for (let row = 0; row < 4; row++) { g.fillStyle = '#0c0819'; g.fillRect(0, row * H + 86, cv.width, 6); g.fillStyle = '#2a2149'; g.fillRect(0, row * H + 84, cv.width, 2); }
+  const on = [];
+  for (let row = 0; row < ROWS; row++) {
+    on.push(new Array(COLS).fill(null));
+    if (r() < 0.22) continue;                                       // whole floor dark
+    for (let col = 0; col < COLS; ) {
+      if (r() < density) {
+        const len = 1 + Math.floor(r() * maxRun), c = lit[Math.floor(r() * r() * lit.length)];
+        for (let k = 0; k < len && col < COLS; k++, col++) on[row][col] = c;
+        col += 1;
+      } else col++;
+    }
+  }
+  const stair = Math.floor(r() * COLS);                             // a stairwell column that is always on
+  for (let row = 0; row < ROWS; row++) if (r() < 0.8) on[row][stair] = lit[0];
+  for (let row = 0; row < ROWS; row++) for (let col = 0; col < COLS; col++) {
+    const x = col * W + 6, y = row * H + 12, w = 28, h = 34, c = on[row][col];
+    g.fillStyle = '#080b0f'; g.fillRect(x - 2, y - 2, w + 4, h + 4);
+    if (c) {
+      g.fillStyle = c; g.fillRect(x, y, w, h);
+      const gr = g.createLinearGradient(0, y, 0, y + h); gr.addColorStop(0, 'rgba(255,255,255,0.3)'); gr.addColorStop(1, 'rgba(0,0,0,0.25)');
+      g.fillStyle = gr; g.fillRect(x, y, w, h);
+      const k = r();
+      if (k < 0.3) { g.fillStyle = 'rgba(6,10,14,0.6)'; g.fillRect(x, y, w, 6 + r() * 22); }
+      else if (k < 0.4) { g.fillStyle = 'rgba(6,8,12,0.8)'; const px = x + 5 + r() * 14; g.fillRect(px, y + h - 15, 7, 15); g.beginPath(); g.arc(px + 3.5, y + h - 18, 3.5, 0, 7); g.fill(); }
+    } else {
+      g.fillStyle = 'rgba(120,150,170,0.07)'; g.fillRect(x, y, w, h);
+    }
+    g.fillStyle = '#080b0f'; g.fillRect(x + w / 2 - 1, y, 2, h);
+    const st = g.createLinearGradient(0, y + h, 0, y + h + 22); st.addColorStop(0, 'rgba(0,0,0,0.35)'); st.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = st; g.fillRect(x + 3 + r() * 14, y + h + 2, 5 + r() * 8, 22);       // rain stains under the sills
+    if (r() < 0.1) { g.fillStyle = '#2b333b'; g.fillRect(x + 4, y + h + 4, 16, 9); }  // wall AC unit
+  }
+  for (let row = 0; row < ROWS; row++) { g.fillStyle = 'rgba(0,0,0,0.5)'; g.fillRect(0, row * H + 55, cv.width, 5); g.fillStyle = 'rgba(255,255,255,0.05)'; g.fillRect(0, row * H + 53, cv.width, 2); }
+  for (let col = 0; col < COLS; col += 3) { g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillRect(col * W - 1, 0, 2, cv.height); }
   const t = new THREE.CanvasTexture(cv);
   t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
   return t;
@@ -67,14 +86,16 @@ function puddleTexture() {
   return t;
 }
 
-function signMesh(text, w, h, { fg = '#39f0ff', bg = '#120a26', vertical = false, sub = '' } = {}) {
+function signMesh(text, w, h, { fg = '#39f0ff', bg = '#120a26', vertical = false, sub = '', bare = false } = {}) {
   const ppm = Math.min(48, 1024 / Math.max(w, h));
   const cv = document.createElement('canvas');
   cv.width = Math.round(w * ppm); cv.height = Math.round(h * ppm);
   const g = cv.getContext('2d');
-  g.fillStyle = bg; g.fillRect(0, 0, cv.width, cv.height);
-  g.strokeStyle = fg; g.lineWidth = Math.max(3, ppm * 0.12);
-  g.strokeRect(g.lineWidth, g.lineWidth, cv.width - 2 * g.lineWidth, cv.height - 2 * g.lineWidth);
+  if (!bare) {
+    g.fillStyle = bg; g.fillRect(0, 0, cv.width, cv.height);
+    g.strokeStyle = fg; g.lineWidth = Math.max(3, ppm * 0.12);
+    g.strokeRect(g.lineWidth, g.lineWidth, cv.width - 2 * g.lineWidth, cv.height - 2 * g.lineWidth);
+  }
   g.fillStyle = fg; g.textAlign = 'center'; g.textBaseline = 'middle';
   g.shadowColor = fg; g.shadowBlur = ppm * 0.35;
   const font = (px) => `900 italic ${px}px "Arial Black", Impact, "Segoe UI", sans-serif`;
@@ -88,10 +109,16 @@ function signMesh(text, w, h, { fg = '#39f0ff', bg = '#120a26', vertical = false
     const tw = g.measureText(text).width;
     if (tw > cv.width * 0.86) { px *= (cv.width * 0.86) / tw; g.font = font(px); }
     g.fillText(text, cv.width / 2, cv.height * (sub ? 0.4 : 0.53));
-    if (sub) { g.font = font(cv.height * 0.2); g.fillStyle = '#ffffff'; g.fillText(sub, cv.width / 2, cv.height * 0.78); }
+    if (sub && bare) {                         // tube-light strapline in a lit capsule, like a shopfront logo
+      const bw = cv.width * 0.62, bh = cv.height * 0.2, bx = (cv.width - bw) / 2, by = cv.height * 0.7;
+      g.fillStyle = fg; g.fillRect(bx, by, bw, bh);
+      g.shadowBlur = 0; g.fillStyle = '#ffffff'; g.font = `700 ${bh * 0.62}px "Segoe UI", Arial, sans-serif`;
+      if ('letterSpacing' in g) g.letterSpacing = `${bh * 0.25}px`;
+      g.fillText(sub, cv.width / 2, by + bh * 0.54);
+    } else if (sub) { g.font = font(cv.height * 0.2); g.fillStyle = '#ffffff'; g.fillText(sub, cv.width / 2, cv.height * 0.78); }
   }
   const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
-  return new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide }));
+  return new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide, transparent: bare, alphaTest: bare ? 0.08 : 0 }));
 }
 
 function billboardTexture(w) {
@@ -144,10 +171,10 @@ export function buildWorld(scene, renderer) {
   const wetMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, roughnessMap: puddleTexture(), metalness: 0.35, envMapIntensity: 1.5 });
   const glowMat = new THREE.MeshBasicMaterial({ vertexColors: true });
   const winMats = [
-    windowTexture(['#ff5fd2', '#b388ff', '#7b5cff', '#ffd9f4'], 11),
-    windowTexture(['#39f0ff', '#7de3ff', '#4b7bff', '#e0fbff'], 22),
-    windowTexture(['#f0a850', '#e8823f', '#ff6f91', '#c77dff', '#f0c890'], 33),
-  ].map((map) => new THREE.MeshLambertMaterial({ map, color: 0xb0a4d8, emissive: 0xffffff, emissiveMap: map, emissiveIntensity: 0.8 }));
+    windowTexture(['#bfe4ff', '#8fd0ff', '#e6f5ff', '#5fb8ff', '#ffd9a0'], 11, '#141b21', 0.22, 6),      // corporate concrete, cold light
+    windowTexture(['#59dcff', '#a6f0ff', '#2fa8e0', '#d9fbff'], 22, '#0e1a22', 0.3, 7),                  // teal glass tower
+    windowTexture(['#ffc27a', '#ff9d5c', '#ffe0b0', '#ff7a6b', '#9fd8ff', '#ff6fb5'], 33, '#1c1a20', 0.3, 3),   // housing block, warm
+  ].map((map) => new THREE.MeshLambertMaterial({ map, color: 0xd0d6dc, emissive: 0xffffff, emissiveMap: map, emissiveIntensity: 0.9 }));
 
   const tint = (geo, color) => {
     const c = new THREE.Color(color), n = geo.attributes.position.count, a = new Float32Array(n * 3);
@@ -188,12 +215,12 @@ export function buildWorld(scene, renderer) {
   const winBox = (v, x0, x1, y0, y1, d0, d1) => {
     const w = x1 - x0, h = y1 - y0, dp = d1 - d0;
     const g = new THREE.BoxGeometry(w, h, dp), uv = g.attributes.uv;
-    const off = Math.floor(R() * 6) / 6;
+    const off = Math.floor(R() * 12) / 12, voff = Math.floor(R() * 8) / 8;
     for (let f = 0; f < 6; f++) for (let i = 0; i < 4; i++) {
       const j = f * 4 + i;
       if (f === 2 || f === 3) { uv.setXY(j, 0, 0); continue; }
       const span = f < 2 ? dp : w;
-      uv.setXY(j, off + uv.getX(j) * Math.max(1, Math.round(span / 2)) / 6, uv.getY(j) * Math.max(1, Math.round(h / 3)) / 4);
+      uv.setXY(j, off + uv.getX(j) * Math.max(1, Math.round(span / 2)) / 12, voff + uv.getY(j) * Math.max(1, Math.round(h / 3)) / 8);
     }
     g.translate((x0 + x1) / 2, (y0 + y1) / 2, -(d0 + d1) / 2);
     B.push('win' + v, winMats[v], g, (d0 + d1) / 2);
@@ -235,8 +262,8 @@ export function buildWorld(scene, renderer) {
   {
     const cv = document.createElement('canvas'); cv.width = 16; cv.height = 256;
     const g = cv.getContext('2d'), gr = g.createLinearGradient(0, 0, 0, 256);
-    gr.addColorStop(0, '#05030f'); gr.addColorStop(0.42, '#150a35'); gr.addColorStop(0.5, '#4a1670');
-    gr.addColorStop(0.56, '#a02b8f'); gr.addColorStop(0.62, '#2a0f4f'); gr.addColorStop(1, '#0a0618');
+    gr.addColorStop(0, '#03050c'); gr.addColorStop(0.36, '#0a1428'); gr.addColorStop(0.48, '#1d3350');
+    gr.addColorStop(0.535, '#4a5f7a'); gr.addColorStop(0.57, '#6a4868'); gr.addColorStop(0.63, '#141d33'); gr.addColorStop(1, '#070a14');
     g.fillStyle = gr; g.fillRect(0, 0, 16, 256);
     const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
     const sky = new THREE.Mesh(new THREE.SphereGeometry(2200, 24, 16),
@@ -258,7 +285,7 @@ export function buildWorld(scene, renderer) {
     const stars = new THREE.Points(sg, new THREE.PointsMaterial({ color: 0xcfd8ff, size: 2, sizeAttenuation: false, fog: false, depthWrite: false }));
     stars.name = 'stars'; scene.add(stars);
     // neon haze pooling in the streets far below
-    const haze = new THREE.Mesh(new THREE.PlaneGeometry(900, 2000), new THREE.MeshBasicMaterial({ color: 0x4a1a86, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+    const haze = new THREE.Mesh(new THREE.PlaneGeometry(900, 2000), new THREE.MeshBasicMaterial({ color: 0x1c4a70, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
     haze.rotation.x = -Math.PI / 2; haze.position.set(0, 3, -600); scene.add(haze);
   }
   const beams = [];
@@ -625,11 +652,58 @@ export function buildWorld(scene, renderer) {
   train.position.set(-28.5, 21.6, 0); crossTrain.position.set(-400, 19, -(596 + S));
 
   // ---------------------------------------------------------------- city blocks
+  // Megastructure blocks: concrete podium, set-back tiers, heavy floor bands, service clutter and neon.
+  const CONC = 0x232b33, CONC2 = 0x161c22;
+  const BRANDS = [['KUROMA', 'ELECTRONICS', '#ff5a36'], ['HANAZO', 'HEAVY INDUSTRY', '#39f0ff'], ['ORBITAL', 'FOODS', '#ffb347'], ['NEONKO', 'ARCADE', '#ff5fd2'],
+    ['TETSUDO', 'RAIL', '#ff5a36'], ['VANTA', 'SECURITY', '#7de3ff'], ['MIRAI', 'PHARMA', '#7dffb0'], ['SORA', 'NOODLE', '#ff5a36'], ['KIBO', 'MOTORS', '#ffb347'], ['AKARI', 'OPTICS', '#39f0ff']];
+  let brandN = 0, towerN = 0;
   const tower = (x0, x1, d0, d1, h, v) => {
-    winBox(v, x0, x1, 0, h, d0, d1);
-    if (R() < 0.55) glow([CYAN, MAGENTA, PURPLE][Math.floor(R() * 3)], x0 - 0.05, x1 + 0.05, h, h + 0.5, d0 - 0.05, d1 + 0.05);
-    if (R() < 0.3) { const cx = (x0 + x1) / 2, cd = (d0 + d1) / 2; box(0x15121f, cx - 0.2, cx + 0.2, h, h + 14, cd - 0.2, cd + 0.2); glow(HAZARD, cx - 0.35, cx + 0.35, h + 14, h + 14.7, cd - 0.35, cd + 0.35); }
+    const n = towerN++, inward = (x0 + x1) / 2 < 0 ? x1 : x0, sx = (x0 + x1) / 2 < 0 ? 1 : -1;
+    const h1 = h * (0.5 + R() * 0.2), in1 = 1.5 + R() * 3;
+    winBox(v, x0, x1, 0, h1, d0, d1);                                                  // podium
+    box(CONC, x0 - 0.5, x1 + 0.5, h1 - 1, h1 + 0.3, d0 - 0.5, d1 + 0.5);              // overhanging slab
+    winBox(v, x0 + in1, x1 - in1, h1 + 0.3, h, d0 + in1, d1 - in1);                    // tower above the setback
+    if (h > 70 && R() < 0.6) {                                                         // a third, thinner tier
+      const in2 = in1 + 2 + R() * 2, h2 = h + 12 + R() * 26;
+      if (x1 - x0 > in2 * 2 + 4 && d1 - d0 > in2 * 2 + 4) { winBox((v + 1) % 3, x0 + in2, x1 - in2, h, h2, d0 + in2, d1 - in2); box(CONC, x0 + in1 - 0.3, x1 - in1 + 0.3, h - 0.6, h + 0.2, d0 + in1 - 0.3, d1 - in1 + 0.3); h = h2; }
+    }
+    for (let y = 9 + R() * 6; y < h1 - 6; y += 10 + R() * 9) box(CONC2, x0 - 0.3, x1 + 0.3, y, y + 1.1, d0 - 0.3, d1 + 0.3);   // floor bands
+    // service spine + ducts on the side facing the route
+    const sd = d0 + 2 + R() * (d1 - d0 - 5);
+    box(CONC2, inward - (sx > 0 ? 0 : 1.2), inward + (sx > 0 ? 1.2 : 0), 0, h1 - 1, sd, sd + 2.4);
+    glow(n % 3 === 0 ? 0xff5a36 : 0x2fb6e6, inward + sx * 1.2 - 0.05, inward + sx * 1.2 + 0.05, 4, h1 - 3, sd + 1.1, sd + 1.3);
+    for (let y = 14; y < h1 - 8; y += 9 + R() * 8) if (R() < 0.5) box(0x7c8296, inward - (sx > 0 ? 0 : 0.8), inward + (sx > 0 ? 0.8 : 0), y, y + 0.9, sd + 3.4, sd + 4.8);
+    // roof plant: tanks, AC blocks, antenna racks, dishes, beacons
+    const cx = (x0 + x1) / 2, cd = (d0 + d1) / 2, top = h;
+    box(CONC, cx - 2.5, cx + 1.5, top, top + 2.2, cd - 2, cd + 1.5);
+    if (R() < 0.7) { for (const ox of [-1.4, 0, 1.4]) { box(0x101318, cx + ox - 0.07, cx + ox + 0.07, top + 2.2, top + 9 + R() * 7, cd - 0.07, cd + 0.07); } box(0x101318, cx - 1.8, cx + 1.8, top + 6, top + 6.1, cd - 0.05, cd + 0.05); box(0x101318, cx - 1.8, cx + 1.8, top + 8, top + 8.1, cd - 0.05, cd + 0.05); glow(HAZARD, cx - 0.25, cx + 0.25, top + 9, top + 9.5, cd - 0.25, cd + 0.25); }
+    if (R() < 0.5) cyl(0x39424c, 1.6, 3, x0 + in1 + 3, top + 1.5, d0 + in1 + 3, 'y', false, 10);
+    if (R() < 0.5) addGeo(new THREE.CylinderGeometry(1.8, 0.5, 0.5, 12), 0x9aa3ad, x1 - in1 - 3, top + 2.6, d1 - in1 - 3, 0.9, R() * 6, 0);
+    if (R() < 0.45) glow(n % 2 ? 0x2fb6e6 : 0xff5a36, x0 + in1, x1 - in1, h - 0.3, h, d0 + in1 - 0.06, d0 + in1);
+    // corporate lettering on the face the runner approaches
+    if (h1 > 34 && x1 - x0 > 14 && n % 3 === 1) {
+      const [name, sub, fg] = BRANDS[brandN++ % BRANDS.length], w = Math.min(x1 - x0 - 2, 20);
+      sign(name, w, w * 0.34, cx, h1 * (0.55 + R() * 0.25), d0 - 0.2, 'back', { fg, sub, bare: true });
+    }
   };
+  // Overhead megastructure: colossal concrete decks spanning the district, lit from below.
+  const overpass = (d, y, depth) => {
+    box(CONC2, -120, 120, y, y + 7, d, d + depth);
+    box(CONC, -120, 120, y + 7, y + 8.5, d - 1.5, d + depth + 1.5);
+    for (let x = -108; x < 110; x += 24) { box(0x0f1418, x, x + 3, y - 2.4, y, d, d + depth); glow(0xff5a36, x + 4, x + 18, y - 0.08, y, d + depth * 0.45, d + depth * 0.45 + 0.5); }
+    for (const x of [-52, 46]) { box(CONC2, x, x + 8, 0, y, d + depth * 0.25, d + depth * 0.75); boxR(CONC2, 5, 30, 5, x + (x < 0 ? 16 : -8), y - 11, d + depth / 2, 0, 0, x < 0 ? -0.75 : 0.75); }
+    winBox(1, -110, -30, y + 8.5, y + 26, d + 3, d + depth - 3); winBox(0, 20, 96, y + 8.5, y + 20, d + 3, d + depth - 3);
+    glow(0x2fb6e6, -120, 120, y + 3.4, y + 3.7, d - 0.08, d);
+  };
+  overpass(104, 66, 30); overpass(380, 74, 36); overpass(622, 52, 28); overpass(930, 58, 34);
+  // lattice power pylons
+  const pylon = (x, d, h) => {
+    for (const [ox, od] of [[-1.6, -1.6], [1.6, -1.6], [-1.6, 1.6], [1.6, 1.6]]) boxR(0x0f1418, 0.25, h, 0.25, x + ox * 0.55, h / 2, d + od * 0.55, od * 0.035, 0, -ox * 0.035);
+    for (let y = 8; y < h; y += 9) { box(0x0f1418, x - 1.7, x + 1.7, y, y + 0.15, d - 0.08, d + 0.08); box(0x0f1418, x - 0.08, x + 0.08, y, y + 0.15, d - 1.7, d + 1.7); }
+    for (const y of [h - 4, h - 12]) box(0x0f1418, x - 7, x + 7, y, y + 0.3, d - 0.15, d + 0.15);
+    glow(HAZARD, x - 0.3, x + 0.3, h, h + 0.6, d - 0.3, d + 0.3);
+  };
+  for (const [x, d, h] of [[-34, 40, 70], [33, 210, 62], [-34, 470, 56], [33, 700, 50], [-34, 880, 48]]) pylon(x, d, h);
   for (let d = -130; d < 1300; ) {
     const len = 16 + R() * 20;
     for (const sx of [-1, 1]) {
@@ -654,14 +728,14 @@ export function buildWorld(scene, renderer) {
   // megatowers on the horizon
   for (let i = 0; i < 16; i++) {
     const x = -330 + i * 44 + R() * 20, w = 26 + R() * 30, h = 150 + R() * 240;
-    winBox(i % 3, x, x + w, 0, h, 1330 + R() * 220, 1410 + R() * 260);
+    const dd = 1330 + R() * 220; tower(x, x + w, dd, dd + 50 + R() * 40, h, i % 3);
   }
-  sign('GLASS DISTRICT', 46, 9, 96, 118, 930, 'back', { fg: '#39f0ff' });
-  sign('ARCADE', 26, 8, -88, 92, 520, 'back', { fg: '#ff5fd2' });
-  sign('NEO SODA', 30, 8, 84, 84, 300, 'back', { fg: '#b388ff' });
-  sign('24H', 12, 9, -70, 70, 190, 'back', { fg: '#ffb347' });
+  sign('GLASS DISTRICT', 46, 12, 96, 118, 960, 'back', { fg: '#39f0ff', sub: 'SECTOR 7', bare: true });
+  
+  
+  
   // avenue lane glow
-  for (const x of [-34.5, -22.5, 27.5, 39]) glow(0x3b2a6a, x - 0.1, x + 0.1, 0, 0.03, -130, 1150);
+  for (const x of [-34.5, -22.5, 27.5, 39]) glow(0x1f4a66, x - 0.1, x + 0.1, 0, 0.03, -130, 1150);
 
   // ---------------------------------------------------------------- rooftop dressing
   // Side terraces beside the run line carry the lived-in clutter: shacks, tanks, dishes,
@@ -710,6 +784,24 @@ export function buildWorld(scene, renderer) {
     box(SHEET[Math.floor(R() * SHEET.length)], xf - 0.01, xf + 0.04, y + 0.1, y + 0.9, d + dp * 0.15, d + dp * 0.45);
     if (R() < 0.6) box(0x7c8296, x - 0.4, x + 0.4, y + h + 0.13, y + h + 0.7, d - 0.4, d + 0.4);
   };
+  const stack = (x, y, d, face) => {                       // shacks piled two or three high with a ladder and a tarp
+    let yy = y;
+    const n = 2 + (R() < 0.4 ? 1 : 0);
+    for (let i = 0; i < n; i++) {
+      const w = 3 - i * 0.4, dp = 3.6 - i * 0.5, h = 2.3, ox = (R() - 0.5) * 0.6, col = SHEET[Math.floor(R() * SHEET.length)];
+      box(col, x + ox - w / 2, x + ox + w / 2, yy, yy + h, d - dp / 2, d + dp / 2);
+      for (let k = -w / 2 + 0.35; k < w / 2; k += 0.35) box(0x12161b, x + ox + k - 0.02, x + ox + k + 0.02, yy, yy + h, d - dp / 2 - 0.02, d - dp / 2);
+      box(0x565b78, x + ox - w / 2 - 0.3, x + ox + w / 2 + 0.3, yy + h, yy + h + 0.1, d - dp / 2 - 0.3, d + dp / 2 + 0.3);
+      const xf = face > 0 ? x + ox - w / 2 - 0.03 : x + ox + w / 2;
+      glow([WARM, 0x9fd8ff, 0xff5a36][Math.floor(R() * 3)], xf, xf + 0.03, yy + 0.9, yy + 1.6, d - dp * 0.3, d + dp * 0.05);
+      glow([WARM, 0x9fd8ff][i % 2], x + ox - 0.5, x + ox + 0.5, yy + 1.0, yy + 1.6, d - dp / 2 - 0.04, d - dp / 2);
+      yy += h + 0.1;
+    }
+    box(0x8a8f9c, x - face * 1.7 - 0.04, x - face * 1.7 + 0.04, y, yy - 2.3, d + 0.6, d + 0.68);          // ladder rails
+    box(0x8a8f9c, x - face * 1.7 - 0.04, x - face * 1.7 + 0.04, y, yy - 2.3, d + 1.1, d + 1.18);
+    boxR([0x2f6fb8, 0xb04a7a, 0x2f8f86][Math.floor(R() * 3)], 2.6, 0.05, 2.2, x, yy + 0.5, d, 0.2, 0, face * 0.15);   // tarp
+    if (R() < 0.6) dish(x + 0.6, yy, d + 0.8, 0.55);
+  };
   const terrace = (sx, half, top, d0, d1, w = 5.5) => {
     const xa = sx > 0 ? half + 0.3 : -half - 0.3 - w, xb = xa + w, cx = (xa + xb) / 2;
     winBox(Math.floor(R() * 3), xa + 0.2, xb - 0.2, 0, top - 0.7, d0 + 0.6, d1 - 0.6);
@@ -718,7 +810,7 @@ export function buildWorld(scene, renderer) {
     const y = top - 0.3;
     let prev = -1;
     for (let d = d0 + 3.5; d < d1 - 4; d += 6 + R() * 4) {
-      let k = Math.floor(R() * 8); if (k === prev) k = (k + 1) % 8; prev = k;
+      let k = Math.floor(R() * 10); if (k === prev) k = (k + 1) % 10; prev = k;
       const far = cx + sx * 1.2, near = cx - sx * 1.4;
       if (k === 0) shack(far, y, d, 2.8, 3.6, sx);
       else if (k === 1) tank(far, y, d);
@@ -727,7 +819,8 @@ export function buildWorld(scene, renderer) {
       else if (k === 4) { chair(near, y, d, 0xd6342c); chair(near + sx * 0.9, y, d + 0.7, 0x3558c9); box(0xe9eef5, near - 0.3, near + 0.3, y, y + 0.4, d + 1.2, d + 1.6); }
       else if (k === 5) { tree(near, y, d); tree(far, y, d + 1.6); }
       else if (k === 6) { solar(cx, y, d); solar(cx, y, d + 2); }
-      else umbrella(cx, y, d);
+      else if (k === 7) umbrella(cx, y, d);
+      else stack(far, y, d, sx);
     }
     // sagging cables along the outer edge
     const px = sx > 0 ? xb - 0.4 : xa + 0.4;
@@ -809,10 +902,10 @@ export function buildWorld(scene, renderer) {
   scene.add(van);
 
   // ---------------------------------------------------------------- lights
-  const hemi = new THREE.HemisphereLight(0x9d8cff, 0x24103f, 1.0); scene.add(hemi);
-  const key = new THREE.DirectionalLight(0xffb0e6, 1.9); scene.add(key); scene.add(key.target);
-  key.shadow.mapSize.set(2048, 2048);
-  Object.assign(key.shadow.camera, { left: -36, right: 36, top: 36, bottom: -36, near: 1, far: 240 });
+  const hemi = new THREE.HemisphereLight(0x8fb0e8, 0x1c1626, 1.0); scene.add(hemi);
+  const key = new THREE.DirectionalLight(0xffc4b0, 1.9); scene.add(key); scene.add(key.target);
+  key.shadow.mapSize.set(1024, 1024);
+  Object.assign(key.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30, near: 1, far: 240 });
   key.shadow.bias = -0.0005; key.shadow.normalBias = 0.06;
   const rim = new THREE.DirectionalLight(0x4be3ff, 0.9); rim.position.set(40, 30, -60); scene.add(rim);
 
@@ -837,7 +930,11 @@ export function buildWorld(scene, renderer) {
     // low quality swaps the physically based materials for cheap ones
     setQuality(level) {
       const low = level === 'low';
-      for (const { key: k, mesh } of B.meshes) if (k === 'lit' || k === 'wet') mesh.material = low ? lamMat : k === 'wet' ? wetMat : litMat;
+      // only High pays for physically based shading everywhere; Med keeps just the wet roofs
+      for (const { key: k, mesh } of B.meshes) {
+        if (k === 'lit') mesh.material = level === 'high' ? litMat : lamMat;
+        else if (k === 'wet') mesh.material = low ? lamMat : wetMat;
+      }
       key.castShadow = level === 'high';
       hemi.intensity = low ? 1.5 : 1.0; key.intensity = low ? 1.3 : 1.9;
     },

@@ -20,7 +20,7 @@ const canvas = $('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x120a26);
-scene.fog = new THREE.Fog(0x24104a, 60, 980);
+scene.fog = new THREE.Fog(0x131c33, 55, 900);
 const camera = new THREE.PerspectiveCamera(62, 1, 0.1, 3200);
 // ---------------------------------------------------------------- objects
 const world = buildWorld(scene, renderer);
@@ -91,7 +91,7 @@ function showBests() {
   $('title-bests').textContent = bc === null ? '' : `BEST CASH ${money(bc)}  ·  BEST TIME ${clock(bt)}`;
 }
 const PROMPTS = {
-  steer: ['<b>A / D</b> or <b>← →</b> to steer', 'Slide the <b>left pad</b> to steer'],
+  steer: ['<b>A / D</b> or <b>← →</b> to steer', '<b>Swipe anywhere</b> to steer'],
   vault: ['<b>VAULT</b> — press <b>SPACE</b> right at the unit', '<b>VAULT</b> — tap <b>JUMP</b> right at the unit'],
   slide: ['<b>SLIDE</b> under — hold <b>S</b> or <b>↓</b>', '<b>SLIDE</b> under — hold <b>SLIDE</b>'],
   double: ['<b>DOUBLE JUMP</b> the gap — jump, then jump again in mid-air', '<b>DOUBLE JUMP</b> the gap — jump, then jump again in mid-air'],
@@ -362,6 +362,7 @@ function present(rdt) {
   fx.update(sdt, game.clock);
   world.update(game.clock, player.d);
   cop.update(rdt, game.clock, player, game.state === 'play' ? game.chaseT : 0, game.state === 'busted');
+  if (cop.stomp) { sfx.play('stomp'); game.shake = Math.max(game.shake, 0.07); }
   world.van.position.z = -game.vanD;
 
   const g = player.groundUnder(player.x, player.d, player.y + 0.5);
@@ -402,7 +403,7 @@ input.onRetry = (code) => {
   if (game.state === 'finish' || game.state === 'busted' ? game.resultsShown : code === 'KeyR' && game.state === 'play') resetRun(true);
 };
 input.onMute = () => { sfx.setMuted(!sfx.muted); $('mute').classList.toggle('off', sfx.muted); };
-input.bindTouch({ root: $('touch'), steer: $('steer'), knob: $('knob'), jump: $('btn-jump'), slide: $('btn-slide') });
+input.bindTouch({ root: $('touch'), zone: $('steerzone'), knob: $('knob'), jump: $('btn-jump'), slide: $('btn-slide') });
 $('mute').classList.toggle('off', sfx.muted);
 $('gfxbtn').addEventListener('click', () => { gfx.cycle(); $('gfxbtn').textContent = 'GFX ' + gfx.label; $('gfxbtn').blur(); });
 $('mute').addEventListener('click', () => { sfx.unlock(); input.onMute(); $('mute').blur(); });

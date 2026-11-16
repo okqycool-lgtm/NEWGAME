@@ -67,7 +67,7 @@ export class Gfx {
     this.mode = LEVELS.includes(forced) ? forced : LEVELS.includes(saved) ? saved : 'auto';
     this.locked = LEVELS.includes(forced);
     this.frames = 0; this.acc = 0; this.slow = 0; this.last = performance.now(); this.warm = 0;
-    this.setLevel(this.mode === 'auto' ? (this.coarse ? 'med' : 'high') : this.mode);
+    this.setLevel(this.mode === 'auto' ? 'med' : this.mode);
   }
 
   get label() { return this.mode === 'auto' ? 'AUTO' : this.mode.toUpperCase(); }
@@ -76,26 +76,27 @@ export class Gfx {
     this.mode = order[(order.indexOf(this.mode) + 1) % order.length];
     try { localStorage.setItem('cyberheist.gfx', this.mode); } catch { /* ignore */ }
     this.slow = 0; this.warm = 0;
-    this.setLevel(this.mode === 'auto' ? (this.coarse ? 'med' : 'high') : this.mode);
+    this.setLevel(this.mode === 'auto' ? 'med' : this.mode);
   }
 
   setLevel(level) {
     this.level = level;
     const r = this.renderer, dpr = devicePixelRatio || 1;
-    this.pixelRatio = level === 'high' ? Math.min(dpr, this.coarse ? 1.5 : 2) : level === 'med' ? Math.min(dpr, 1.25) : 1;
+    // kept deliberately modest: resolution is what heats a device up
+    this.pixelRatio = level === 'high' ? Math.min(dpr, 1.5) : level === 'med' ? Math.min(dpr, 1) : Math.min(dpr, 0.85);
     if (this.composer) { this.composer.renderTarget1.dispose(); this.composer.renderTarget2.dispose(); this.bloom.dispose(); this.composer = null; }
-    if (level !== 'low') {
+    if (level === 'high') {
       const size = r.getDrawingBufferSize(new THREE.Vector2());
-      const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: level === 'high' ? 4 : 0 });
+      const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: level === 'high' ? 2 : 0 });
       this.composer = new EffectComposer(r, rt);
       this.composer.addPass(new RenderPass(this.scene, this.camera));
-      this.bloom = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), level === 'high' ? 0.42 : 0.36, 0.5, 0.82);
+      this.bloom = new UnrealBloomPass(new THREE.Vector2(size.x / 2, size.y / 2), 0.42, 0.5, 0.82);
       this.composer.addPass(this.bloom);
       this.final = new ShaderPass(FinalShader);
       this.composer.addPass(this.final);
       this.composer.addPass(new OutputPass());
     }
-    this.rain.visible = level !== 'low';
+    this.rain.visible = level === 'high';
     this.onLevel?.(level);
     this.resize();
   }
@@ -117,7 +118,7 @@ export class Gfx {
     this.acc += dt;
     if (++this.frames < 90) return;
     const avg = this.acc / this.frames; this.frames = 0; this.acc = 0;
-    this.slow = avg > 25 ? this.slow + 1 : 0;
+    this.slow = avg > 24 ? this.slow + 1 : 0;
     if (this.slow >= 2) { this.slow = 0; this.warm = 0; this.setLevel(LEVELS[LEVELS.indexOf(this.level) + 1]); }
   }
 
@@ -126,7 +127,7 @@ export class Gfx {
     this.boost += (boost - this.boost) * Math.min(1, 5 * dt);
     this.hit += (hit - this.hit) * Math.min(1, 10 * dt);
     if (this.rain.visible || this.level !== 'low') {
-      this.rain.visible = this.level !== 'low' && !indoors;
+      this.rain.visible = this.level === 'high' && !indoors;
       this.rain.material.uniforms.uTime.value = time;
       this.rain.material.uniforms.uCam.value.copy(this.camera.position);
     }

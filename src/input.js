@@ -34,28 +34,36 @@ export class Input {
     addEventListener('blur', () => { this.left = this.right = this.slideKey = false; });
   }
 
-  bindTouch({ root, steer, knob, jump, slide }) {
-    const show = () => { if (!this.touchMode) { this.touchMode = true; } root.classList.add('on'); };
+  bindTouch({ root, zone, knob, jump, slide }) {
+    const show = () => { this.touchMode = true; root.classList.add('on'); };
     if (matchMedia('(pointer: coarse)').matches) show();
     addEventListener('touchstart', show, { passive: true });
 
-    // steering pad: where the thumb is on the pad = how hard to steer
-    let steerId = null;
+    // Steering: drag anywhere on the screen. The first touch point is the centre of a
+    // virtual stick; dragging past its range slides the centre along so reversing is instant.
+    const RANGE = 46;
+    let steerId = null, cx = 0;
     const setSteer = (e) => {
-      const r = steer.getBoundingClientRect();
-      const v = Math.max(-1, Math.min(1, (e.clientX - (r.left + r.width / 2)) / (r.width * 0.3)));
-      this.touchSteer = Math.abs(v) < 0.12 ? 0 : v;
-      knob.style.transform = `translateX(${v * r.width * 0.3}px)`;
+      let dx = e.clientX - cx;
+      if (dx > RANGE) { cx = e.clientX - RANGE; dx = RANGE; } else if (dx < -RANGE) { cx = e.clientX + RANGE; dx = -RANGE; }
+      const v = dx / RANGE;
+      this.touchSteer = Math.abs(v) < 0.14 ? 0 : v;
+      knob.style.transform = `translate(${cx + dx - 28}px, ${e.clientY - 28}px)`;
     };
-    steer.addEventListener('pointerdown', (e) => {
-      e.preventDefault(); steerId = e.pointerId; steer.setPointerCapture(e.pointerId); steer.classList.add('down'); setSteer(e); this.onAny?.();
+    zone.addEventListener('pointerdown', (e) => {
+      if (steerId !== null) return;
+      e.preventDefault(); steerId = e.pointerId; cx = e.clientX;
+      try { zone.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
+      if (e.pointerType !== 'mouse') show();
+      knob.classList.add('on'); setSteer(e); this.onAny?.();
     });
-    steer.addEventListener('pointermove', (e) => { if (e.pointerId === steerId) setSteer(e); });
+    zone.addEventListener('pointermove', (e) => { if (e.pointerId === steerId) setSteer(e); });
     const endSteer = (e) => {
       if (e.pointerId !== steerId) return;
-      steerId = null; this.touchSteer = 0; knob.style.transform = ''; steer.classList.remove('down');
+      steerId = null; this.touchSteer = 0; knob.classList.remove('on');
     };
-    steer.addEventListener('pointerup', endSteer); steer.addEventListener('pointercancel', endSteer);
+    zone.addEventListener('pointerup', endSteer); zone.addEventListener('pointercancel', endSteer);
+    zone.addEventListener('contextmenu', (e) => e.preventDefault());
 
     const button = (el, down, up) => {
       el.addEventListener('pointerdown', (e) => { e.preventDefault(); el.setPointerCapture(e.pointerId); el.classList.add('down'); down(); this.onAny?.(); });
