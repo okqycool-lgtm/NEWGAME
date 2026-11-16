@@ -21,8 +21,8 @@ npm run dev      # prints a local URL and a network URL (open that on a phone / 
 | Action | Keyboard | Touch |
 | --- | --- | --- |
 | Steer | A / D or ← / → | drag anywhere on screen |
-| Jump, double jump, vault, wall kick-off | Space (W / ↑) | JUMP |
-| Slide, landing roll | S / ↓ | SLIDE |
+| Jump, double jump, vault, wall kick-off | Space (W / ↑) | swipe up, or JUMP |
+| Slide, landing roll | S / ↓ | swipe down, or SLIDE |
 | Retry | R (Space / Enter on the results screen) | RETRY |
 | Mute | M | ♪ |
 | Graphics quality | — | GFX button (Auto / High / Med / Low) |

@@ -68,6 +68,34 @@ check('second stumble during the chase = busted, bests untouched', r.state === '
 r = await run({ route: 'market', retry: true, stopD: 30 });
 check('retry after a bust starts a clean run', r.state === 'play' && r.cash === 50000 && r.chaseT === 0);
 
+// swipe gestures, driven with real pointer events against the stepped simulation
+const sw = await page.evaluate(() => {
+  const { game, player: p, input, tick, resetRun } = window.__ch, zone = document.getElementById('steerzone');
+  const none = { steer: 0, jump: false, slide: false, slideHeld: false };
+  const step = (n) => { for (let i = 0; i < n; i++) tick(1 / 120, i === 0 ? input.consume() : { ...input.consume(), jump: false, slide: false }); };
+  const pe = (type, x, y, id = 7) => zone.dispatchEvent(new PointerEvent(type, { pointerId: id, clientX: x, clientY: y, pointerType: 'touch', bubbles: true }));
+  const flick = (x, y0, y1, lift = true) => { pe('pointerdown', x, y0); for (let i = 1; i <= 4; i++) pe('pointermove', x, y0 + ((y1 - y0) * i) / 4); if (lift) pe('pointerup', x, y1); };
+  const run = () => { for (let i = 0; i < 2000 && !(game.state === 'play' && p.state === 'run' && p.grounded); i++) tick(1 / 120, none); };
+  game.manual = true; resetRun(true); run(); for (let i = 0; i < 120; i++) tick(1 / 120, none);
+  const out = {};
+  flick(200, 500, 430); step(6); out.jump = p.state === 'air' && !p.usedDouble;
+  flick(200, 500, 430); step(6); out.double = p.usedDouble;
+  run();
+  flick(200, 430, 500, false); step(6); out.slide = p.state === 'slide';
+  step(90); out.slideHeld = p.state === 'slide';                 // finger still down: slide holds past its minimum
+  pe('pointerup', 200, 500); step(40); out.slideEnds = p.state === 'run';
+  // one long upward drag must fire only one jump
+  run(); pe('pointerdown', 200, 600); for (let i = 1; i <= 30; i++) pe('pointermove', 200, 600 - i * 8); step(6); out.oneJumpPerFlick = p.state === 'air' && !p.usedDouble; pe('pointerup', 200, 360);
+  // a slow diagonal steering drag must not jump or slide
+  run(); const x0 = p.x; pe('pointerdown', 250, 400);
+  for (let i = 1; i <= 40; i++) { pe('pointermove', 250 - i * 3, 400 - i * 1.2); step(3); }
+  out.steerOnly = p.state === 'run' && p.x < x0 - 1; pe('pointerup', 130, 352);
+  return out;
+});
+check('swipe up jumps, a second swipe up double jumps', sw.jump && sw.double && sw.oneJumpPerFlick, JSON.stringify(sw));
+check('swipe down slides and holds while the finger stays down', sw.slide && sw.slideHeld && sw.slideEnds);
+check('a steering drag never triggers a jump or slide', sw.steerOnly);
+
 // personal bests survive a refresh
 const before = await page.evaluate(() => ({ c: localStorage.getItem('cyberheist.bestCash'), t: localStorage.getItem('cyberheist.bestTime') }));
 await page.reload();
