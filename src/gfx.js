@@ -15,7 +15,7 @@ const FinalShader = {
     float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
     void main(){
       vec2 c = vUv - 0.5; float r2 = dot(c, c);
-      float ca = (0.004 + uBoost * 0.016 + uHit * 0.03) * r2;            // lens fringe, stronger at speed
+      float ca = (0.004 + uBoost * 0.009 + uHit * 0.03) * r2;            // lens fringe, stronger at speed
       vec3 col = vec3(texture2D(tDiffuse, vUv + c * ca).r, texture2D(tDiffuse, vUv).g, texture2D(tDiffuse, vUv - c * ca).b);
       float l = dot(col, vec3(0.299, 0.587, 0.114));
       col = mix(vec3(l), col, 1.12);                                      // a little extra saturation

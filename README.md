@@ -25,6 +25,7 @@ npm run dev      # prints a local URL and a network URL (open that on a phone / 
 | Slide, landing roll | S / ↓ | SLIDE |
 | Retry | R (Space / Enter on the results screen) | RETRY |
 | Mute | M | ♪ |
+| Graphics quality | — | GFX button (Auto / High / Med / Low) |
 
 - **Vault:** jump when you're right at a low obstacle. Jump earlier and it's a normal jump.
 - **Wall run:** jump beside the yellow billboard and steer into it; jump again on the KICK panel.
@@ -42,6 +43,7 @@ npm run dev      # prints a local URL and a network URL (open that on a phone / 
 - `src/runner.js` — character model and procedural animation
 - `src/world.js` — city and route visuals
 - `src/main.js` — game loop, camera, HUD, cash rules
+- `src/gfx.js` — post-processing, rain, and the automatic quality ladder
 - `src/cop.js` — the robot officer
 - `src/fx.js`, `src/audio.js`, `src/input.js` — particles, synthesised sound, keyboard/touch
 

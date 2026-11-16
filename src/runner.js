@@ -12,7 +12,7 @@ const mat = (c, glow = 0) => {
   const k = c + ':' + glow;
   if (!mats[k]) {
     const chrome = c === C.chrome;       // real metal so the forearm and heels catch the neon
-    mats[k] = new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: chrome ? 0.08 : glow * 1.6 + 0.08, flatShading: true,
+    mats[k] = new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: chrome ? 0.08 : glow * 1.1 + 0.07, flatShading: true,
       roughness: chrome ? 0.18 : 0.7, metalness: chrome ? 1 : 0.05, envMapIntensity: chrome ? 2.4 : 1 });
   }
   return mats[k];
