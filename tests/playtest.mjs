@@ -111,6 +111,30 @@ await page.reload();
 await page.waitForFunction(() => window.__ch);
 const after = await page.evaluate(() => ({ c: localStorage.getItem('cyberheist.bestCash'), t: localStorage.getItem('cyberheist.bestTime'), title: document.getElementById('title-bests').textContent }));
 check('personal bests survive a refresh (stored separately)', before.c === '50000' && after.c === before.c && after.t === before.t && /BEST CASH \$50,000/.test(after.title), JSON.stringify(after));
+await page.close();
+// ---------------------------------------------------------------- JOB 02: Iron Harbor
+if (!process.env.SKIP_L2) {
+  const p2 = await ctx.newPage();
+  p2.on('pageerror', (e) => errors.push('L2 ' + e.message));
+  await p2.goto(BASE + (BASE.includes('?') ? '&' : '?') + 'level=2');
+  await p2.waitForFunction(() => window.__ch);
+  await p2.addScriptTag({ content: bot });
+  const run2 = (opts) => p2.evaluate((o) => window.runBot(o), opts);
+  let h = await run2({ route: 'market' });
+  if (verbose) console.log(JSON.stringify(h, null, 1));
+  check('harbor: dock alley reaches the skiff', h.state === 'finish' && h.cash === 50000 && h.stats.falls === 0 && h.minYMid < 9, `time ${h.time}s | ${h.tricks} | ${h.lands}`);
+  const dockTime = h.time;
+  h = await run2({ route: 'roof', retry: true });
+  if (verbose) console.log(JSON.stringify(h, null, 1));
+  check('harbor: crane line (hull wall run on the right) reaches the skiff', h.state === 'finish' && /wallrun:1/.test(h.tricks) && /kickoff:1/.test(h.tricks) && h.minYMid > 13 && h.stats.falls === 0, `time ${h.time}s | ${h.tricks} | ${h.lands}`);
+  check('harbor: crane line is faster, level is 55–90 s', h.time < dockTime && h.time > 55 && dockTime < 90, `${h.time}s vs ${dockTime}s`);
+  h = await run2({ route: 'roof', kick: false, retry: true });
+  check('harbor: missed kick-off bounces off the tarp into the dock alley', h.state === 'finish' && /bounce:[1-9]/.test(h.tricks) && h.stats.falls === 0 && h.minYMid < 9, `${h.tricks}`);
+  const keys = await p2.evaluate(() => [localStorage.getItem('cyberheist.bestCash2'), localStorage.getItem('cyberheist.bestCash')].join('|'));
+  check('harbor: bests are stored separately from job 01', /^50000\|/.test(keys), keys);
+  await p2.close();
+}
+
 check('no page errors', errors.length === 0, errors.slice(0, 3).join(' | '));
 await browser.close();
 console.log(fails ? `\n${fails} check(s) failed` : '\nAll checks passed');

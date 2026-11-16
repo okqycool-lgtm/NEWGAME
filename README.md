@@ -2,7 +2,9 @@
 
 A third-person parkour getaway in the browser. You've just robbed Kumo Bank and
 have $50,000 in an overstuffed backpack; kick through the window and reach the
-getaway van with as much of it as you can. One handcrafted level, about 75 seconds.
+getaway vehicle with as much of it as you can. Two handcrafted jobs, picked from the
+title screen: **Glass District** (neon rooftops, about 75 seconds) and **Iron Harbor**
+(a rain-soaked container port across the bay, about 65 seconds).
 
 Built with Three.js + Vite. All art, text and sound are generated at runtime — no
 asset downloads, no accounts, nothing to install for players.
@@ -39,10 +41,11 @@ npm run dev      # prints a local URL and a network URL (open that on a phone / 
 
 ## Layout
 
-- `src/level.js` — level data: colliders, obstacles, wall, zones, checkpoints
+- `src/level.js` — level data for both jobs: colliders, obstacles, wall, zones, checkpoints
+- `src/world2.js` — Iron Harbor visuals
 - `src/player.js` — runner physics and parkour moves
 - `src/runner.js` — character model and procedural animation
-- `src/world.js` — city and route visuals
+- `src/world.js` — Glass District visuals and shared texture/batching helpers
 - `src/main.js` — game loop, camera, HUD, cash rules
 - `src/gfx.js` — post-processing, rain, and the automatic quality ladder
 - `src/cop.js` — the robot officer

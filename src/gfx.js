@@ -96,7 +96,7 @@ export class Gfx {
       this.composer.addPass(this.final);
       this.composer.addPass(new OutputPass());
     }
-    this.rain.visible = false;                 // clear sunset sky: the rain stays off
+    this.rain.visible = false;
     this.onLevel?.(level);
     this.resize();
   }
@@ -127,7 +127,7 @@ export class Gfx {
     this.boost += (boost - this.boost) * Math.min(1, 5 * dt);
     this.hit += (hit - this.hit) * Math.min(1, 10 * dt);
     if (this.rain.visible || this.level !== 'low') {
-      this.rain.visible = false;
+      this.rain.visible = !!this.rainOn && this.level !== 'low' && !indoors;
       this.rain.material.uniforms.uTime.value = time;
       this.rain.material.uniforms.uCam.value.copy(this.camera.position);
     }

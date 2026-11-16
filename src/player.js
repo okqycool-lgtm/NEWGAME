@@ -14,9 +14,9 @@ const LEDGE_REACH = 1.6;
 const VAULT_RANGE = 3.3;
 const ROLL_DROP = 6.5;
 const COMBO_WINDOW = 6.5;       // seconds to land the next perfect move before the chain drops
-const PERFECT_VAULT = 1.3;     // metres from the obstacle: jump this late and the vault is perfect
-const PERFECT_SLIDE = 2.4;     // metres from the overhead edge
-const PERFECT_ROLL = 0.11;     // seconds before touchdown
+const PERFECT_VAULT = 2.0;     // metres from the obstacle: jump this late and the vault is perfect
+const PERFECT_SLIDE = 3.4;     // metres from the overhead edge
+const PERFECT_ROLL = 0.17;     // seconds before touchdown
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const smooth = (a, b, v) => { const t = clamp((v - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
@@ -389,7 +389,7 @@ export class Player {
   bounce(c) {
     this.grounded = false; this.usedDouble = false;
     this.vy = 11.5; this.peakY = this.y;
-    if (this.x < c.targetX - 1) {
+    if (Math.abs(this.x - c.targetX) > 1) {            // carry toward the safe line, whichever side it is on
       this.assistT = 0.9;
       this.assistVx = (c.targetX - this.x) / 0.9;
     }

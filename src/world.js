@@ -2,12 +2,13 @@
 // Everything is generated at runtime — no external assets.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { colliders, walls, LANDING_PAD, VAN, S } from './level.js';
+import { colliders, walls, LANDING_PAD, VAN, S, LEVEL } from './level.js';
+import { buildHarbor } from './world2.js';
 
 export const ACCENT = 0xffd60a;        // runnable walls + reachable ledges
 const CYAN = 0x39f0ff, MAGENTA = 0xff3df0, PURPLE = 0x8b5cff, HAZARD = 0xff3b30, WARM = 0xffb347;
 
-function rng(seed) {
+export function rng(seed) {
   return () => {
     seed |= 0; seed = (seed + 0x6d2b79f5) | 0;
     let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
@@ -19,7 +20,7 @@ function rng(seed) {
 // ------------------------------------------------------------------ textures
 // Facades at dusk: weathered concrete lit by the sunset, with dense warm window light in
 // irregular clusters. Returns the colour map plus an emissive map holding only the lit panes.
-function windowTexture(lit, seed, wall = '#5a5068', density = 0.34, maxRun = 4) {
+export function windowTexture(lit, seed, wall = '#5a5068', density = 0.34, maxRun = 4) {
   const r = rng(seed), W = 40, H = 60, COLS = 12, ROWS = 8;
   const cv = document.createElement('canvas'), ev = document.createElement('canvas');
   cv.width = ev.width = W * COLS; cv.height = ev.height = H * ROWS;
@@ -106,7 +107,7 @@ function skyTexture() {
 }
 
 // Rooftop surface: a patchwork of poured slabs and tar-paper repairs, seams, stains and cracks.
-function roofTexture() {
+export function roofTexture() {
   const r = rng(909), cv = document.createElement('canvas'); cv.width = cv.height = 512;
   const g = cv.getContext('2d');
   g.fillStyle = '#8b8391'; g.fillRect(0, 0, 512, 512);
@@ -146,7 +147,7 @@ function fenceTexture() {
 }
 
 // Warm pool of light under a wall lamp.
-function lampTexture() {
+export function lampTexture() {
   const cv = document.createElement('canvas'); cv.width = cv.height = 128;
   const g = cv.getContext('2d'), gr = g.createRadialGradient(64, 0, 2, 64, 0, 128);
   gr.addColorStop(0, 'rgba(255,255,255,0.95)'); gr.addColorStop(0.35, 'rgba(255,255,255,0.42)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
@@ -156,7 +157,7 @@ function lampTexture() {
 }
 
 // Roughness map for wet roofs: glossy puddles in rougher concrete.
-function puddleTexture() {
+export function puddleTexture() {
   const r = rng(77), cv = document.createElement('canvas'); cv.width = cv.height = 256;
   const g = cv.getContext('2d');
   g.fillStyle = 'rgb(150,150,150)'; g.fillRect(0, 0, 256, 256);
@@ -174,7 +175,7 @@ function puddleTexture() {
   return t;
 }
 
-function signMesh(text, w, h, { fg = '#39f0ff', bg = '#120a26', vertical = false, sub = '', bare = false } = {}) {
+export function signMesh(text, w, h, { fg = '#39f0ff', bg = '#120a26', vertical = false, sub = '', bare = false } = {}) {
   const ppm = Math.min(48, 1024 / Math.max(w, h));
   const cv = document.createElement('canvas');
   cv.width = Math.round(w * ppm); cv.height = Math.round(h * ppm);
@@ -209,29 +210,32 @@ function signMesh(text, w, h, { fg = '#39f0ff', bg = '#120a26', vertical = false
   return new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide, transparent: bare, alphaTest: bare ? 0.08 : 0 }));
 }
 
-function billboardTexture(w) {
+export function billboardTexture(w, flip = false) {
   const cv = document.createElement('canvas'); cv.width = 1024; cv.height = 256;
   const g = cv.getContext('2d');
   g.fillStyle = '#1b1030'; g.fillRect(0, 0, 1024, 256);
   const kx = ((w.kickFrom - w.d0) / (w.d1 - w.d0)) * 1024;
+  if (flip) { g.save(); g.translate(1024, 0); g.scale(-1, 1); }      // mirrored layout for a wall on the right
   g.strokeStyle = '#ffd60a'; g.lineWidth = 26; g.lineJoin = 'miter';
   for (let x = 30; x < kx - 40; x += 92) {
     g.beginPath(); g.moveTo(x, 50); g.lineTo(x + 56, 128); g.lineTo(x, 206); g.stroke();
   }
   g.fillStyle = '#ffd60a'; g.fillRect(kx, 0, 1024 - kx, 256);
-  g.fillStyle = '#1b1030'; g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.font = '900 italic 92px "Arial Black", Impact, sans-serif';
-  g.fillText('KICK', kx + (1024 - kx) / 2, 92);
+  g.fillStyle = '#1b1030';
   g.beginPath(); const cx = kx + (1024 - kx) / 2;                      // arrow pointing off the wall
   g.moveTo(cx - 70, 150); g.lineTo(cx + 20, 150); g.lineTo(cx + 20, 128); g.lineTo(cx + 80, 180);
   g.lineTo(cx + 20, 232); g.lineTo(cx + 20, 210); g.lineTo(cx - 70, 210); g.closePath(); g.fill();
   g.strokeStyle = '#ffd60a'; g.lineWidth = 14; g.strokeRect(7, 7, 1010, 242);
+  if (flip) g.restore();
+  g.fillStyle = '#1b1030'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.font = '900 italic 92px "Arial Black", Impact, sans-serif';
+  g.fillText('KICK', flip ? (1024 - kx) / 2 : kx + (1024 - kx) / 2, 92);
   const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace;
   return t;
 }
 
 // ------------------------------------------------------------------ batching
-class Batch {
+export class Batch {
   constructor(scene) { this.scene = scene; this.groups = new Map(); this.meshes = []; }
   push(key, material, geo, d) {
     const k = key + '|' + Math.floor(d / 160);
@@ -242,7 +246,7 @@ class Batch {
     for (const { key, material, list } of this.groups.values()) {
       const mesh = new THREE.Mesh(mergeGeometries(list, false), material);
       mesh.matrixAutoUpdate = false;
-      mesh.castShadow = key === 'lit' || key === 'wet' || key.startsWith('win'); mesh.receiveShadow = mesh.castShadow;
+      mesh.castShadow = key === 'lit' || key === 'wet' || key === 'deck' || key.startsWith('win'); mesh.receiveShadow = mesh.castShadow;
       this.meshes.push({ key, mesh });
       this.scene.add(mesh);
       list.forEach((g) => g.dispose());
@@ -252,6 +256,7 @@ class Batch {
 }
 
 export function buildWorld(scene, renderer) {
+  if (LEVEL === 2) return buildHarbor(scene, renderer);
   const R = rng(20771);
   const B = new Batch(scene);
   const lamMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });

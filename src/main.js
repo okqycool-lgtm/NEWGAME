@@ -26,6 +26,7 @@ const camera = new THREE.PerspectiveCamera(62, 1, 0.1, 3200);
 const world = buildWorld(scene, renderer);
 const gfx = new Gfx(renderer, scene, camera, (level) => world.setQuality(level));
 $('gfxbtn').textContent = 'GFX\n' + gfx.label;
+gfx.rainOn = L.LEVEL === 2;
 addEventListener('resize', () => gfx.resize());
 const player = new Player();
 const runner = new Runner();
@@ -39,12 +40,13 @@ const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.55, 16),
 shadow.rotation.x = -Math.PI / 2;
 scene.add(shadow);
 const bundleMeshes = [];
-const HUM_SPOTS = [[6.5, 196], [12, 284], [12, 309], [12, 335], [12, 360], [12, 386], [12, 411], [-9.5, 56], [9.6, 106], [-10, 176]];
+const HUM_SPOTS = L.LEVEL !== 1 ? [] : [[6.5, 196], [12, 284], [12, 309], [12, 335], [12, 360], [12, 386], [12, 411], [-9.5, 56], [9.6, 106], [-10, 176]];
 
 // ---------------------------------------------------------------- persistent bests
+const LV = L.LEVEL === 1 ? '' : String(L.LEVEL);        // bests are kept per job
 const store = {
-  get(k) { try { const v = localStorage.getItem('cyberheist.' + k); return v === null ? null : Number(v); } catch { return null; } },
-  set(k, v) { try { localStorage.setItem('cyberheist.' + k, String(v)); } catch { /* private mode */ } },
+  get(k) { k += LV; try { const v = localStorage.getItem('cyberheist.' + k); return v === null ? null : Number(v); } catch { return null; } },
+  set(k, v) { k += LV; try { localStorage.setItem('cyberheist.' + k, String(v)); } catch { /* private mode */ } },
 };
 
 // ---------------------------------------------------------------- game state
@@ -101,6 +103,10 @@ const PROMPTS = {
   wallrun: ['<b>JUMP</b> on the yellow <b>KICK</b> panel', '<b>Swipe up</b> on the yellow <b>KICK</b> panel'],
   roll: ['Long drop — tap <b>S</b> just before landing to <b>ROLL</b>', 'Long drop — <b>swipe down</b> just before landing to <b>ROLL</b>'],
   gap: ['<b>JUMP!</b>', '<b>JUMP!</b>'],
+  split2: ['<b>◀ DOCK ALLEY</b> quayside · safer &nbsp;|&nbsp; <b>CRANE LINE ▶</b> hull run · fast', '<b>◀ DOCK ALLEY</b> quayside · safer &nbsp;|&nbsp; <b>CRANE LINE ▶</b> hull run · fast'],
+  wall2: ['Jump at the hull and <b>steer right</b> into it', 'Jump at the hull and <b>steer right</b> into it'],
+  hops: ['<b>CONTAINER HOPS</b> — jump each gap', '<b>CONTAINER HOPS</b> — jump each gap'],
+  van2: ['<b>JUMP</b> onto the skiff!', '<b>JUMP</b> onto the skiff!'],
   slope: ['<b>SLIDE</b> the slope — hold <b>S</b> to ride it down fast', '<b>SLIDE</b> the slope — <b>swipe down</b> to ride it down fast'],
   van: ['<b>JUMP</b> into the van!', '<b>JUMP</b> into the van!'],
   ready: ['Press <b>SPACE</b> — kick through the glass', '<b>Swipe up</b> or tap — kick through the glass'],
@@ -124,8 +130,7 @@ function updateHud() {
     const segs = $('cashsegs').children, n = Math.round(game.cash / L.BUNDLE);          // one pip per $2,500 bundle
     for (let i = 0; i < segs.length; i++) segs[i].className = i < n ? 'on' : '';
   }
-  const zone = game.state === 'ready' || player.d < 1 ? 'KUMO BANK' : player.d < 240 ? 'ROOFTOPS' : player.d < 440 ? (player.y < 19.5 ? 'NIGHT MARKET' : 'BILLBOARD ROW')
-    : player.d < 560 ? 'FUNNEL' : player.d < 734 ? 'SHANTY ROOFS' : game.state === 'finish' ? 'CLEAR' : 'GETAWAY ROAD';
+  const zone = game.state === 'ready' || player.d < 1 ? L.INFO.start : game.state === 'finish' ? 'CLEAR' : L.INFO.zone(player.d, player.y);
   if (zone !== hud.zone) { hud.zone = zone; $('zonetxt').textContent = zone; }
   const vel = game.state === 'play' ? player.speed : 0, vtxt = vel.toFixed(1);
   if (vtxt !== hud.vel) {
@@ -142,7 +147,7 @@ function updateHud() {
     if (html) $('prompt').innerHTML = html;
     $('prompt').classList.toggle('show', !!html);
   }
-  const prog = Math.round(Math.max(0, Math.min(1, player.d / (700 + L.S))) * 200) / 2;
+  const prog = Math.round(Math.max(0, Math.min(1, player.d / L.INFO.total)) * 200) / 2;
   if (prog !== hud.prog) { hud.prog = prog; $('progfill').style.width = prog + '%'; }
   const combo = game.state === 'play' && player.combo >= 2 ? player.combo : 0;
   if (combo !== hud.combo) { hud.combo = combo; $('combo').classList.toggle('show', combo > 0); if (combo) { $('combotxt').textContent = `COMBO ×${combo}`; restart($('combotxt'), 'bump'); } }
@@ -201,7 +206,7 @@ function updateBundles(dt) {
 }
 
 // ---------------------------------------------------------------- simulation
-const TRICKS = { vault: 'SPEED VAULT', wallrun: 'WALL RUN', kickoff: 'KICK-OFF!', ledge: 'LEDGE CATCH', bounce: 'AWNING SAVE!' };
+const TRICKS = { vault: 'SPEED VAULT', wallrun: 'WALL RUN', kickoff: 'KICK-OFF!', ledge: 'LEDGE CATCH', bounce: L.LEVEL === 2 ? 'TARP SAVE!' : 'AWNING SAVE!' };
 function perfectMove(name, combo) {
   toast(combo > 1 ? `${name} ×${combo}` : name, 'perfect');
   sfx.perfect(combo);
@@ -435,6 +440,19 @@ $('mute').addEventListener('click', () => { sfx.unlock(); input.onMute(); $('mut
 $('title').addEventListener('pointerdown', (e) => { e.preventDefault(); sfx.unlock(); input.pressJump(); });
 $('retry').addEventListener('click', () => { sfx.unlock(); resetRun(true); $('retry').blur(); });
 document.addEventListener('visibilitychange', () => { last = performance.now(); });
+
+// ---- job select: each job is its own page load
+function gotoLevel(n) { try { localStorage.setItem('cyberheist.level', String(n)); } catch { /* ignore */ } location.href = location.pathname; }
+$('t-job').textContent = L.INFO.job; $('t-sub').textContent = L.INFO.sub; $('r-job').textContent = 'DEBRIEF // JOB 0' + L.LEVEL; $('r-name').textContent = L.INFO.name;
+for (const b of document.querySelectorAll('.job')) {
+  const n = Number(b.dataset.level);
+  b.classList.toggle('active', n === L.LEVEL);
+  b.addEventListener('pointerdown', (e) => e.stopPropagation());
+  b.addEventListener('click', (e) => { e.stopPropagation(); if (n !== L.LEVEL) gotoLevel(n); b.blur(); });
+}
+const other = L.LEVELS.find((v) => v.id !== L.LEVEL);
+$('nextjob').textContent = `${other.id > L.LEVEL ? 'NEXT' : 'PREVIOUS'} JOB ▸ ${other.name}`;
+$('nextjob').addEventListener('click', () => gotoLevel(other.id));
 
 resetRun(false);
 showBests();
