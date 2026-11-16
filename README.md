@@ -20,7 +20,7 @@ npm run dev      # prints a local URL and a network URL (open that on a phone / 
 
 | Action | Keyboard | Touch |
 | --- | --- | --- |
-| Steer | A / D or ← / → | left pad |
+| Steer | A / D or ← / → | drag anywhere on screen |
 | Jump, double jump, vault, wall kick-off | Space (W / ↑) | JUMP |
 | Slide, landing roll | S / ↓ | SLIDE |
 | Retry | R (Space / Enter on the results screen) | RETRY |

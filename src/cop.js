@@ -8,7 +8,7 @@ const ARMOR = lam(0x14161c, 0.15), PLATE = lam(0x2a2f3a, 0.2), STEEL = lam(0x5b6
 export class Cop {
   constructor(scene) {
     const root = this.root = new THREE.Group();
-    const model = new THREE.Group(); model.scale.setScalar(1.38); root.add(model);   // towers over the runner
+    const model = new THREE.Group(); model.scale.setScalar(1.26); root.add(model);   // towers over the runner
     const part = (parent, m, w, h, d, x, y, z, rx = 0, ry = 0, rz = 0) => {
       const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); b.position.set(x, y, z); b.rotation.set(rx, ry, rz); parent.add(b); return b;
     };
@@ -83,14 +83,14 @@ export class Cop {
   update(dt, time, player, chase, busted) {
     this.stomp = false;
     const active = chase > 0 || busted;
-    const target = busted ? 0.7 : chase > 1 ? 1.7 + (1 - Math.min(1, chase / 8)) * 1.8 : 14;
+    const target = busted ? 0.7 : chase > 1 ? 2.0 + (1 - Math.min(1, chase / 8)) * 1.8 : 14;
     this.gap += (target - this.gap) * Math.min(1, (active ? 5 : 1.6) * dt);
     if (!active && this.gap > 12) { this.root.visible = false; return; }
     this.root.visible = true;
     const d = player.d - this.gap;
     // run off the runner's shoulder so the officer never hides them from the camera
     if (player.x > 1.5) this.side = -1; else if (player.x < -1.5) this.side = 1;
-    const tx = player.x + (busted ? this.side * 0.6 : this.side * 1.9);
+    const tx = player.x + (busted ? this.side * 0.6 : this.side * 2.1);
     this.x += (tx - this.x) * Math.min(1, 6 * dt);
     const g = player.groundUnder(this.x, d, player.y + 2.5);
     const gy = g ? Math.max(g.top, player.y - 3) : player.y;
