@@ -19,8 +19,8 @@ const clock = (t) => `${Math.floor(t / 60)}:${(t % 60).toFixed(1).padStart(4, '0
 const canvas = $('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x8a6090);
-scene.fog = new THREE.Fog(0x9a6a96, 70, 1050);
+scene.background = new THREE.Color(0x0a0820);
+scene.fog = new THREE.Fog(0x1c1244, 70, 1000);
 const camera = new THREE.PerspectiveCamera(62, 1, 0.1, 3200);
 // ---------------------------------------------------------------- objects
 const world = buildWorld(scene, renderer);
@@ -382,7 +382,7 @@ function present(rdt) {
   if (player.state === 'slide' && player.grounded && game.state === 'play') fx.slide(sdt, player.x, player.y, player.d, player.speed);
   // the shadow-casting light follows the runner (snapped so shadow edges don't shimmer)
   const sx = Math.round(player.x / 2) * 2, sy = Math.round(player.y / 2) * 2, sz = Math.round(-player.d / 2) * 2;
-  world.sun.position.set(sx + 62, sy + 44, sz - 38); world.sun.target.position.set(sx, sy, sz - 4); world.sun.target.updateMatrixWorld();
+  world.sun.position.set(sx - 22, sy + 70, sz + 38); world.sun.target.position.set(sx, sy, sz - 4); world.sun.target.updateMatrixWorld();
   updateCamera(rdt);
   updateHud();
   gfx.render(rdt, game.clock, player.boostT > 0 && game.state === 'play' ? Math.min(1, player.speed / 15) : 0, Math.min(1, game.shake * 1.6), player.d < 0.5 && game.state !== 'finish');
