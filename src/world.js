@@ -17,21 +17,23 @@ function rng(seed) {
 }
 
 // ------------------------------------------------------------------ textures
-// Facades: dark stained concrete with irregular clusters of lit windows (runs, stacks, dark floors),
-// rather than an even grid. 12 x 8 windows per tile so the pattern doesn't visibly repeat.
-function windowTexture(lit, seed, wall = '#141b21', density = 0.24, maxRun = 5) {
-  const r = rng(seed), cv = document.createElement('canvas'), W = 40, H = 60, COLS = 12, ROWS = 8;
-  cv.width = W * COLS; cv.height = H * ROWS;
-  const g = cv.getContext('2d');
+// Facades at dusk: weathered concrete lit by the sunset, with dense warm window light in
+// irregular clusters. Returns the colour map plus an emissive map holding only the lit panes.
+function windowTexture(lit, seed, wall = '#5a5068', density = 0.34, maxRun = 4) {
+  const r = rng(seed), W = 40, H = 60, COLS = 12, ROWS = 8;
+  const cv = document.createElement('canvas'), ev = document.createElement('canvas');
+  cv.width = ev.width = W * COLS; cv.height = ev.height = H * ROWS;
+  const g = cv.getContext('2d'), e = ev.getContext('2d');
   g.fillStyle = wall; g.fillRect(0, 0, cv.width, cv.height);
-  for (let i = 0; i < 160; i++) {                                   // blotchy concrete
-    g.fillStyle = r() < 0.5 ? `rgba(255,255,255,${0.012 + r() * 0.03})` : `rgba(0,0,0,${0.05 + r() * 0.14})`;
+  e.fillStyle = '#000'; e.fillRect(0, 0, ev.width, ev.height);
+  for (let i = 0; i < 200; i++) {                                   // patchy, repainted concrete
+    g.fillStyle = r() < 0.5 ? `rgba(255,235,220,${0.02 + r() * 0.06})` : `rgba(30,15,40,${0.05 + r() * 0.14})`;
     g.fillRect(r() * cv.width, r() * cv.height, 6 + r() * 70, 4 + r() * 40);
   }
   const on = [];
   for (let row = 0; row < ROWS; row++) {
     on.push(new Array(COLS).fill(null));
-    if (r() < 0.22) continue;                                       // whole floor dark
+    if (r() < 0.12) continue;
     for (let col = 0; col < COLS; ) {
       if (r() < density) {
         const len = 1 + Math.floor(r() * maxRun), c = lit[Math.floor(r() * r() * lit.length)];
@@ -40,30 +42,65 @@ function windowTexture(lit, seed, wall = '#141b21', density = 0.24, maxRun = 5) 
       } else col++;
     }
   }
-  const stair = Math.floor(r() * COLS);                             // a stairwell column that is always on
-  for (let row = 0; row < ROWS; row++) if (r() < 0.8) on[row][stair] = lit[0];
   for (let row = 0; row < ROWS; row++) for (let col = 0; col < COLS; col++) {
     const x = col * W + 6, y = row * H + 12, w = 28, h = 34, c = on[row][col];
-    g.fillStyle = '#080b0f'; g.fillRect(x - 2, y - 2, w + 4, h + 4);
+    g.fillStyle = '#2a2233'; g.fillRect(x - 2, y - 2, w + 4, h + 4);
     if (c) {
-      g.fillStyle = c; g.fillRect(x, y, w, h);
-      const gr = g.createLinearGradient(0, y, 0, y + h); gr.addColorStop(0, 'rgba(255,255,255,0.3)'); gr.addColorStop(1, 'rgba(0,0,0,0.25)');
-      g.fillStyle = gr; g.fillRect(x, y, w, h);
+      for (const ctx of [g, e]) {
+        ctx.fillStyle = c; ctx.fillRect(x, y, w, h);
+        const gr = ctx.createLinearGradient(0, y, 0, y + h); gr.addColorStop(0, 'rgba(255,255,255,0.25)'); gr.addColorStop(1, 'rgba(120,40,0,0.25)');
+        ctx.fillStyle = gr; ctx.fillRect(x, y, w, h);
+        ctx.fillStyle = 'rgba(30,18,30,0.85)'; ctx.fillRect(x + w / 2 - 1, y, 2, h); ctx.fillRect(x, y + h * 0.45, w, 2);
+      }
       const k = r();
-      if (k < 0.3) { g.fillStyle = 'rgba(6,10,14,0.6)'; g.fillRect(x, y, w, 6 + r() * 22); }
-      else if (k < 0.4) { g.fillStyle = 'rgba(6,8,12,0.8)'; const px = x + 5 + r() * 14; g.fillRect(px, y + h - 15, 7, 15); g.beginPath(); g.arc(px + 3.5, y + h - 18, 3.5, 0, 7); g.fill(); }
+      if (k < 0.3) { const bh = 6 + r() * 20; for (const ctx of [g, e]) { ctx.fillStyle = 'rgba(40,24,30,0.6)'; ctx.fillRect(x, y, w, bh); } }
+      else if (k < 0.4) { const px = x + 5 + r() * 14; for (const ctx of [g, e]) { ctx.fillStyle = 'rgba(30,18,24,0.85)'; ctx.fillRect(px, y + h - 15, 7, 15); ctx.beginPath(); ctx.arc(px + 3.5, y + h - 18, 3.5, 0, 7); ctx.fill(); } }
     } else {
-      g.fillStyle = 'rgba(120,150,170,0.07)'; g.fillRect(x, y, w, h);
+      const gr = g.createLinearGradient(0, y, 0, y + h); gr.addColorStop(0, '#3b3352'); gr.addColorStop(1, '#6b4a66');   // dark glass catching the sky
+      g.fillStyle = gr; g.fillRect(x, y, w, h);
+      g.fillStyle = '#2a2233'; g.fillRect(x + w / 2 - 1, y, 2, h);
     }
-    g.fillStyle = '#080b0f'; g.fillRect(x + w / 2 - 1, y, 2, h);
-    const st = g.createLinearGradient(0, y + h, 0, y + h + 22); st.addColorStop(0, 'rgba(0,0,0,0.35)'); st.addColorStop(1, 'rgba(0,0,0,0)');
+    const st = g.createLinearGradient(0, y + h, 0, y + h + 22); st.addColorStop(0, 'rgba(30,15,35,0.4)'); st.addColorStop(1, 'rgba(30,15,35,0)');
     g.fillStyle = st; g.fillRect(x + 3 + r() * 14, y + h + 2, 5 + r() * 8, 22);       // rain stains under the sills
-    if (r() < 0.1) { g.fillStyle = '#2b333b'; g.fillRect(x + 4, y + h + 4, 16, 9); }  // wall AC unit
+    if (r() < 0.16) { g.fillStyle = '#a79fa6'; g.fillRect(x + 4, y + h + 4, 16, 9); g.fillStyle = '#4a4350'; g.fillRect(x + 6, y + h + 6, 8, 5); }   // wall AC unit
+    if (r() < 0.07) { g.fillStyle = ['#a8446a', '#4f7fa8', '#c9b06a'][Math.floor(r() * 3)]; g.fillRect(x - 2, y + h + 3, w + 4, 6); }                  // little awning
   }
-  for (let row = 0; row < ROWS; row++) { g.fillStyle = 'rgba(0,0,0,0.5)'; g.fillRect(0, row * H + 55, cv.width, 5); g.fillStyle = 'rgba(255,255,255,0.05)'; g.fillRect(0, row * H + 53, cv.width, 2); }
-  for (let col = 0; col < COLS; col += 3) { g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillRect(col * W - 1, 0, 2, cv.height); }
-  const t = new THREE.CanvasTexture(cv);
-  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  for (let row = 0; row < ROWS; row++) { g.fillStyle = 'rgba(30,15,40,0.4)'; g.fillRect(0, row * H + 55, cv.width, 5); g.fillStyle = 'rgba(255,230,210,0.1)'; g.fillRect(0, row * H + 53, cv.width, 2); }
+  for (let col = 0; col < COLS; col += 3) { g.fillStyle = 'rgba(30,15,40,0.3)'; g.fillRect(col * W - 1, 0, 2, cv.height); }
+  const mk = (c, srgb) => { const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; if (srgb) t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t; };
+  return { map: mk(cv, true), emis: mk(ev, true) };
+}
+
+// Sunset sky: purple zenith to an orange horizon, streaked with lit clouds.
+function skyTexture() {
+  const r = rng(404), cv = document.createElement('canvas'); cv.width = 1024; cv.height = 512;
+  const g = cv.getContext('2d'), gr = g.createLinearGradient(0, 0, 0, 512);
+  [[0, '#3f3486'], [0.2, '#6a4aa3'], [0.34, '#a85aa8'], [0.43, '#e2769b'], [0.485, '#ff9f7c'], [0.505, '#ffb97e'], [0.53, '#d98793'], [0.6, '#8a6090'], [1, '#4a3558']]
+    .forEach(([t, c]) => gr.addColorStop(t, c));
+  g.fillStyle = gr; g.fillRect(0, 0, 1024, 512);
+  const sun = g.createRadialGradient(700, 252, 0, 700, 252, 260);                    // sun glow, ahead and to the right
+  sun.addColorStop(0, 'rgba(255,236,190,0.95)'); sun.addColorStop(0.12, 'rgba(255,190,130,0.6)'); sun.addColorStop(1, 'rgba(255,150,120,0)');
+  g.fillStyle = sun; g.fillRect(0, 0, 1024, 512);
+  for (let i = 0; i < 70; i++) {                                                     // cloud streaks, lit from below
+    const y = 110 + r() * 150, x = r() * 1024, w = 60 + r() * 220, h = 5 + r() * 14, k = (y - 110) / 150;
+    for (const ox of [0, -1024, 1024]) {
+      const cg = g.createLinearGradient(0, y - h, 0, y + h);
+      cg.addColorStop(0, `rgba(${120 + k * 60},${80 + k * 30},${170 - k * 30},0)`); cg.addColorStop(0.45, `rgba(${150 + k * 70},${95 + k * 40},${180 - k * 40},0.5)`);
+      cg.addColorStop(0.8, `rgba(255,${150 + k * 50},${150 - k * 20},0.65)`); cg.addColorStop(1, 'rgba(255,190,150,0)');
+      g.fillStyle = cg; g.beginPath(); g.ellipse(x + ox, y, w, h, 0, 0, 7); g.fill();
+    }
+  }
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+// Warm pool of light under a wall lamp.
+function lampTexture() {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 128;
+  const g = cv.getContext('2d'), gr = g.createRadialGradient(64, 0, 2, 64, 0, 128);
+  gr.addColorStop(0, 'rgba(255,214,150,0.95)'); gr.addColorStop(0.35, 'rgba(255,170,90,0.45)'); gr.addColorStop(1, 'rgba(255,150,80,0)');
+  g.fillStyle = gr; g.beginPath(); g.moveTo(52, 0); g.lineTo(76, 0); g.lineTo(128, 128); g.lineTo(0, 128); g.fill();
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace;
   return t;
 }
 
@@ -154,7 +191,7 @@ class Batch {
     for (const { key, material, list } of this.groups.values()) {
       const mesh = new THREE.Mesh(mergeGeometries(list, false), material);
       mesh.matrixAutoUpdate = false;
-      mesh.castShadow = key !== 'glow'; mesh.receiveShadow = key !== 'glow';
+      mesh.castShadow = key !== 'glow' && key !== 'cone'; mesh.receiveShadow = mesh.castShadow;
       this.meshes.push({ key, mesh });
       this.scene.add(mesh);
       list.forEach((g) => g.dispose());
@@ -171,10 +208,11 @@ export function buildWorld(scene, renderer) {
   const wetMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, roughnessMap: puddleTexture(), metalness: 0.35, envMapIntensity: 1.5 });
   const glowMat = new THREE.MeshBasicMaterial({ vertexColors: true });
   const winMats = [
-    windowTexture(['#bfe4ff', '#8fd0ff', '#e6f5ff', '#5fb8ff', '#ffd9a0'], 11, '#141b21', 0.22, 6),      // corporate concrete, cold light
-    windowTexture(['#59dcff', '#a6f0ff', '#2fa8e0', '#d9fbff'], 22, '#0e1a22', 0.3, 7),                  // teal glass tower
-    windowTexture(['#ffc27a', '#ff9d5c', '#ffe0b0', '#ff7a6b', '#9fd8ff', '#ff6fb5'], 33, '#1c1a20', 0.3, 3),   // housing block, warm
-  ].map((map) => new THREE.MeshLambertMaterial({ map, color: 0xd0d6dc, emissive: 0xffffff, emissiveMap: map, emissiveIntensity: 0.9 }));
+    windowTexture(['#ffc978', '#ffb060', '#ffe2a6', '#ff9a5a', '#9fe6ff'], 11, '#5d5269', 0.3, 5),              // concrete offices
+    windowTexture(['#ffd08a', '#ffb86a', '#59dcff', '#ff6fb5', '#ffe6b8'], 22, '#4f4a66', 0.26, 6),              // darker tower, a little neon
+    windowTexture(['#ffc66e', '#ffab52', '#ffe0a0', '#ff8a5c', '#ffd08a', '#ff6fb5'], 33, '#6a5568', 0.46, 3),   // packed housing block
+  ].map(({ map, emis }) => new THREE.MeshLambertMaterial({ map, emissive: 0xffffff, emissiveMap: emis, emissiveIntensity: 1.0 }));
+  const coneMat = new THREE.MeshBasicMaterial({ map: lampTexture(), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
 
   const tint = (geo, color) => {
     const c = new THREE.Color(color), n = geo.attributes.position.count, a = new Float32Array(n * 3);
@@ -233,6 +271,17 @@ export function buildWorld(scene, renderer) {
     scene.add(m);
     return m;
   };
+  // wall lamp: face 'left' = wall faces +x, 'right' = faces -x, 'back' = faces the approaching runner
+  const lamp = (x, y, d, face, size = 4.2) => {
+    const g = new THREE.PlaneGeometry(size * 0.9, size);
+    g.translate(0, -size / 2, 0);
+    if (face === 'left') g.rotateY(Math.PI / 2); else if (face === 'right') g.rotateY(-Math.PI / 2);
+    const o = 0.07, ox = face === 'left' ? o : face === 'right' ? -o : 0, od = face === 'back' ? -o : 0;
+    g.translate(x + ox, y, -(d + od));
+    B.push('cone', coneMat, g, d);
+    if (face === 'back') { box(0x3a3440, x - 0.35, x + 0.35, y, y + 0.16, d - 0.3, d); glow(0xffe2a8, x - 0.28, x + 0.28, y - 0.05, y, d - 0.26, d - 0.02); }
+    else { const xa = face === 'left' ? x : x - 0.3; box(0x3a3440, xa, xa + 0.3, y, y + 0.16, d - 0.35, d + 0.35); glow(0xffe2a8, xa + 0.02, xa + 0.28, y - 0.05, y, d - 0.28, d + 0.28); }
+  };
   const laundry = (xa, xb, y, d) => {
     box(0x0b0b12, xa, xb, y, y + 0.04, d, d + 0.04);
     const cols = [0xf5f1ff, 0xff8fc7, 0x5fe0d8, 0xb9a2ff, 0xff6b5e, 0x8fd0ff];
@@ -260,41 +309,25 @@ export function buildWorld(scene, renderer) {
 
   // ---------------------------------------------------------------- sky + ground
   {
-    const cv = document.createElement('canvas'); cv.width = 16; cv.height = 256;
-    const g = cv.getContext('2d'), gr = g.createLinearGradient(0, 0, 0, 256);
-    gr.addColorStop(0, '#03050c'); gr.addColorStop(0.36, '#0a1428'); gr.addColorStop(0.48, '#1d3350');
-    gr.addColorStop(0.535, '#4a5f7a'); gr.addColorStop(0.57, '#6a4868'); gr.addColorStop(0.63, '#141d33'); gr.addColorStop(1, '#070a14');
-    g.fillStyle = gr; g.fillRect(0, 0, 16, 256);
-    const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
-    const sky = new THREE.Mesh(new THREE.SphereGeometry(2200, 24, 16),
-      new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, fog: false, depthWrite: false }));
+    const sky = new THREE.Mesh(new THREE.SphereGeometry(2200, 32, 20),
+      new THREE.MeshBasicMaterial({ map: skyTexture(), side: THREE.BackSide, fog: false, depthWrite: false }));
     sky.name = 'sky'; scene.add(sky);
-    const moon = new THREE.Mesh(new THREE.CircleGeometry(150, 40), new THREE.MeshBasicMaterial({ color: 0xff9be8, fog: false }));
-    moon.position.set(-260, 330, -1900); scene.add(moon);
-    const ring = new THREE.Mesh(new THREE.RingGeometry(190, 200, 48), new THREE.MeshBasicMaterial({ color: 0x39f0ff, fog: false, side: THREE.DoubleSide }));
-    ring.position.copy(moon.position); ring.rotation.x = 1.25; scene.add(ring);
+    // the district spire and its halo, a landmark on the horizon
+    const sil = new THREE.MeshBasicMaterial({ color: 0x6f5596, fog: false }), neonC = new THREE.MeshBasicMaterial({ color: 0x59e6ff, fog: false }), neonP = new THREE.MeshBasicMaterial({ color: 0xff7ad9, fog: false });
+    const spire = new THREE.Group(); spire.position.set(190, 0, -1950);
+    [[120, 150, 0], [86, 170, 150], [56, 190, 320], [30, 170, 510], [10, 150, 680]].forEach(([w, h, y]) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, w), sil); m.position.y = y + h / 2; spire.add(m); });
+    for (const [x, y, h, m] of [[-20, 330, 260, neonC], [14, 300, 180, neonP], [-44, 180, 150, neonP], [36, 160, 130, neonC]]) { const b = new THREE.Mesh(new THREE.BoxGeometry(5, h, 2), m); b.position.set(x, y + h / 2, 62); spire.add(b); }
+    const halo = new THREE.Mesh(new THREE.TorusGeometry(175, 3.5, 6, 56), neonP); halo.rotation.x = 1.38; halo.position.y = 560; spire.add(halo);
+    const halo2 = new THREE.Mesh(new THREE.TorusGeometry(120, 2.5, 6, 48), neonC); halo2.rotation.x = 1.38; halo2.position.y = 600; spire.add(halo2);
+    for (const [x, w, h] of [[-330, 60, 300], [-240, 40, 420], [240, 50, 380], [330, 70, 260], [-430, 50, 220], [420, 44, 330]]) { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, w), sil); m.position.set(x, h / 2, 40); spire.add(m); }
+    scene.add(spire);
   }
-  box(0x0c0918, -400, 400, -1, -0.06, -260, 1700);
+  box(0x3a2d44, -400, 400, -1, -0.06, -260, 1700);
   {
-    const n = 700, pos = new Float32Array(n * 3);
-    for (let i = 0; i < n; i++) {
-      const a = R() * Math.PI * 2, e = 0.12 + R() * 1.3, rad = 2000;
-      pos.set([Math.cos(a) * Math.cos(e) * rad, Math.sin(e) * rad, Math.sin(a) * Math.cos(e) * rad], i * 3);
-    }
-    const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    const stars = new THREE.Points(sg, new THREE.PointsMaterial({ color: 0xcfd8ff, size: 2, sizeAttenuation: false, fog: false, depthWrite: false }));
-    stars.name = 'stars'; scene.add(stars);
-    // neon haze pooling in the streets far below
-    const haze = new THREE.Mesh(new THREE.PlaneGeometry(900, 2000), new THREE.MeshBasicMaterial({ color: 0x1c4a70, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+    // warm dust and street glow pooling between the blocks
+    const haze = new THREE.Mesh(new THREE.PlaneGeometry(900, 2000), new THREE.MeshBasicMaterial({ color: 0x7a3a5e, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
     haze.rotation.x = -Math.PI / 2; haze.position.set(0, 3, -600); scene.add(haze);
   }
-  const beams = [];
-  for (const [x, y, d, col] of [[-170, 150, 420, 0x39f0ff], [150, 170, 760, 0xff3df0], [-120, 190, 1050, 0xb388ff], [190, 140, 250, 0x39f0ff]]) {
-    const cg = new THREE.ConeGeometry(26, 520, 14, 1, true); cg.translate(0, 260, 0);
-    const beam = new THREE.Mesh(cg, new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.07, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, side: THREE.DoubleSide }));
-    beam.position.set(x, y, -d); scene.add(beam); beams.push(beam);
-  }
-
   // ---------------------------------------------------------------- bank
   {
     const F = 34, Ct = 40.5;
@@ -346,28 +379,31 @@ export function buildWorld(scene, renderer) {
   }
 
   // ---------------------------------------------------------------- route structures
-  const ROOF = 0x3a3360, EDGE = 0x1b1730;
+  const ROOF = 0x6f6878, EDGE = 0x544c5e;
   for (const c of colliders) {
     const { x0, x1, d0, d1 } = c, top = c.y1;
     switch (c.style) {
       case 'roof': {
         winBox(c.win ?? 0, x0 + 0.3, x1 - 0.3, 0, top - 0.5, d0 + 0.3, d1 - 0.3);
-        slab(c.shanty ? 0x4a3a52 : ROOF, x0, x1, top - 0.5, top, d0, d1);
+        slab(c.shanty ? 0x7a6470 : ROOF, x0, x1, top - 0.5, top, d0, d1);
         // concrete slab seams + patched panels so it reads as a roof, not a runway
-        for (let x = x0 + 3; x < x1 - 1; x += 3) box(0x241f3a, x - 0.04, x + 0.04, top, top + 0.012, d0 + 0.6, d1 - 0.4);
+        for (let x = x0 + 3; x < x1 - 1; x += 3) box(0x4a4352, x - 0.04, x + 0.04, top, top + 0.012, d0 + 0.6, d1 - 0.4);
         for (let d = d0 + 5; d < d1 - 6; d += 9 + R() * 8) {
           const px = x0 + 1 + R() * (x1 - x0 - 4), pw = 1.2 + R() * 1.6;
-          box([0x453d6e, 0x2e2a4c, 0x51406a, 0x35455e][Math.floor(R() * 4)], px, px + pw, top, top + 0.01, d, d + 1.5 + R() * 2.5);
+          box([0x7d7686, 0x5f5868, 0x867a84, 0x665f72][Math.floor(R() * 4)], px, px + pw, top, top + 0.01, d, d + 1.5 + R() * 2.5);
         }
-        for (let d = Math.ceil(d0 / 12) * 12 + 6; d < d1 - 2; d += 12) glow(0x1f6f8a, x0 + 0.6, x1 - 0.6, top, top + 0.015, d, d + 0.14);
+        for (let d = Math.ceil(d0 / 12) * 12 + 6; d < d1 - 2; d += 12) box(0x4a4352, x0 + 0.3, x1 - 0.3, top, top + 0.012, d, d + 0.08);
         if (!c.noLip) {                                           // reachable ledge = accent
-          glow(ACCENT, x0, x1, top - 0.5, top + 0.02, d0 - 0.06, d0 + 0.5);
+          // worn yellow paint on the ledge: flaking in patches, still unmistakable
+          box(0x8a7a52, x0, x1, top - 0.5, top + 0.015, d0 - 0.05, d0 + 0.5);
+          for (let x = x0; x < x1; ) { const w = 0.5 + R() * 2.2; glow(ACCENT, x, Math.min(x1, x + w), top - 0.5 + R() * 0.12, top + 0.02, d0 - 0.06, d0 + 0.34 + R() * 0.18); x += w + 0.08 + R() * 0.35; }
         }
-        glow(0xf2f2ff, x0, x1, top, top + 0.02, d1 - 0.3, d1 - 0.12);
+        box(0xd8d2c8, x0, x1, top, top + 0.02, d1 - 0.3, d1 - 0.14);
         const open = x1 === -4;                                   // rooftop line: right side opens onto the market
         if (!open) for (const [xa, xb] of [[x0 - 0.3, x0], [x1, x1 + 0.3]]) {
           box(EDGE, xa, xb, top - 0.5, top + 0.4, d0, d1);
-          glow(MAGENTA, xa, xb, top + 0.4, top + 0.45, d0, d1);
+          box(0x8a8290, xa - 0.04, xb + 0.04, top + 0.4, top + 0.47, d0, d1);                       // capping stones
+          cyl(0x9a8478, 0.11, d1 - d0 - 1, (xa + xb) / 2 + (xa < x0 ? -0.34 : 0.34), top + 0.12, (d0 + d1) / 2, 'z');   // service pipe
         }
         break;
       }
@@ -425,7 +461,7 @@ export function buildWorld(scene, renderer) {
       }
       case 'market': {
         box(0x161222, x0, x1, 0, top - 0.3, d0, d1);
-        slab(0x2c2440, x0, x1, top - 0.3, top, d0, d1);
+        slab(0x5e5466, x0, x1, top - 0.3, top, d0, d1);
         for (let d = d0 + 4; d < d1; d += 8) glow(0x5a2a80, x0 + 0.4, x1 - 0.4, top, top + 0.015, d, d + 0.1);
         glow(MAGENTA, x0 + 0.05, x0 + 0.12, top, top + 0.03, d0, d1);
         glow(CYAN, x1 - 0.12, x1 - 0.05, top, top + 0.03, d0, d1);
@@ -443,7 +479,7 @@ export function buildWorld(scene, renderer) {
         const cy = (c.yA + c.yB) / 2, cd = (d0 + d1) / 2;
         if (c.style === 'tin') {
           // corrugated tin roof: coloured sheets with ridges running down the slope
-          const cols = [0x2f8f86, 0x3566a8, 0xa5502f, 0x2f8f86, 0xb04a7a, 0x3566a8];
+          const cols = [0x9c4a5c, 0x5d7fa0, 0x8a3f52, 0x6f8fae, 0xa85a64, 0x54708f];        // rust red and faded blue sheets
           let i = 0;
           for (let x = x0; x < x1; x += 2, i++) boxR(cols[i % cols.length], 2, 0.3, len, x + 1, cy - 0.17, cd, ang);
           for (let x = x0 + 0.5; x < x1; x += 0.5) boxR(0x1b1730, 0.06, 0.05, len, x, cy + 0.0, cd, ang);
@@ -454,7 +490,7 @@ export function buildWorld(scene, renderer) {
           box(0x1a1528, x0, x1, 0, c.yB - 0.3, d0 + 0.4, d1);
           break;
         }
-        boxR(0x2e2948, x1 - x0, 0.4, len, (x0 + x1) / 2, cy - 0.22, cd, ang);
+        boxR(0x6a6272, x1 - x0, 0.4, len, (x0 + x1) / 2, cy - 0.22, cd, ang);
         for (let k = 0.08; k < 1; k += 0.14) {
           boxR(0x5a2a80, x1 - x0 - 1, 0.03, 0.14, (x0 + x1) / 2, c.yA + (c.yB - c.yA) * k + 0.0, d0 + (d1 - d0) * k, ang, 0, 0, true);
         }
@@ -467,7 +503,7 @@ export function buildWorld(scene, renderer) {
       }
       case 'plaza': {
         box(0x161222, x0, x1, 0, top - 0.4, d0, d1);
-        slab(0x2a2444, x0, x1, top - 0.4, top, d0, d1);
+        slab(0x6a6272, x0, x1, top - 0.4, top, d0, d1);
         if (d0 === 440) {
           glow(ACCENT, -13, -4, top - 0.4, top + 0.02, 419.95, 420.5);
           for (const [xa, xb] of [[-13, -6], [12, 6]]) {                                   // funnel rails
@@ -515,12 +551,18 @@ export function buildWorld(scene, renderer) {
       case 'ac': {
         const n = Math.max(1, Math.round((x1 - x0) / 2.3)), w = (x1 - x0) / n;
         for (let i = 0; i < n; i++) {
-          const xa = x0 + i * w + 0.08, xb = x0 + (i + 1) * w - 0.08;
-          box(0x7c8296, xa, xb, b, c.y1, d0, d1);
-          box(0x4b5064, xa + 0.15, xb - 0.15, b + 0.15, c.y1 - 0.2, d0 - 0.04, d0);
-          cyl(0x23252f, Math.min(0.6, (xb - xa) * 0.32), 0.06, (xa + xb) / 2, c.y1 + 0.02, (d0 + d1) / 2, 'y', false, 10);
+          const xa = x0 + i * w + 0.08, xb = x0 + (i + 1) * w - 0.08, r = Math.min(0.34, (xb - xa) * 0.2);
+          box(0xc9c3c4, xa, xb, b + 0.08, c.y1, d0, d1);
+          box(0x6e6672, xa + 0.1, xb - 0.1, b, b + 0.08, d0 + 0.1, d1 - 0.1);                    // pallet feet
+          for (const fx of [(xa * 3 + xb) / 4, (xa + xb * 3) / 4]) {                              // fan grilles
+            cyl(0x3a3440, r, 0.05, fx, (b + c.y1) / 2 + 0.03, d0 - 0.02, 'z', false, 12);
+            cyl(0xa9a2a6, r * 0.28, 0.07, fx, (b + c.y1) / 2 + 0.03, d0 - 0.03, 'z', false, 8);
+            box(0xa9a2a6, fx - r, fx + r, (b + c.y1) / 2, (b + c.y1) / 2 + 0.05, d0 - 0.05, d0 - 0.03);
+          }
+          box(0x9b9498, xa, xb, c.y1 - 0.06, c.y1, d0 - 0.03, d1 + 0.03);
         }
-        glow(MAGENTA, x0, x1, c.y1, c.y1 + 0.04, d0 - 0.05, d0 + 0.05);
+        cyl(0x9a8478, 0.09, x1 - x0, (x0 + x1) / 2, b + 0.14, d1 + 0.16, 'x');                  // conduit behind
+        glow(MAGENTA, x0, x1, c.y1, c.y1 + 0.03, d0 - 0.05, d0 + 0.03);
         break;
       }
       case 'crate': {
@@ -653,7 +695,7 @@ export function buildWorld(scene, renderer) {
 
   // ---------------------------------------------------------------- city blocks
   // Megastructure blocks: concrete podium, set-back tiers, heavy floor bands, service clutter and neon.
-  const CONC = 0x232b33, CONC2 = 0x161c22;
+  const CONC = 0x6a6070, CONC2 = 0x4c4456;
   const BRANDS = [['KUROMA', 'ELECTRONICS', '#ff5a36'], ['HANAZO', 'HEAVY INDUSTRY', '#39f0ff'], ['ORBITAL', 'FOODS', '#ffb347'], ['NEONKO', 'ARCADE', '#ff5fd2'],
     ['TETSUDO', 'RAIL', '#ff5a36'], ['VANTA', 'SECURITY', '#7de3ff'], ['MIRAI', 'PHARMA', '#7dffb0'], ['SORA', 'NOODLE', '#ff5a36'], ['KIBO', 'MOTORS', '#ffb347'], ['AKARI', 'OPTICS', '#39f0ff']];
   let brandN = 0, towerN = 0;
@@ -695,7 +737,7 @@ export function buildWorld(scene, renderer) {
     winBox(1, -110, -30, y + 8.5, y + 26, d + 3, d + depth - 3); winBox(0, 20, 96, y + 8.5, y + 20, d + 3, d + depth - 3);
     glow(0x2fb6e6, -120, 120, y + 3.4, y + 3.7, d - 0.08, d);
   };
-  overpass(104, 66, 30); overpass(380, 74, 36); overpass(622, 52, 28); overpass(930, 58, 34);
+  overpass(380, 86, 36); overpass(980, 70, 34);        // kept few and high so the sunset sky stays open
   // lattice power pylons
   const pylon = (x, d, h) => {
     for (const [ox, od] of [[-1.6, -1.6], [1.6, -1.6], [-1.6, 1.6], [1.6, 1.6]]) boxR(0x0f1418, 0.25, h, 0.25, x + ox * 0.55, h / 2, d + od * 0.55, od * 0.035, 0, -ox * 0.035);
@@ -740,7 +782,7 @@ export function buildWorld(scene, renderer) {
   // ---------------------------------------------------------------- rooftop dressing
   // Side terraces beside the run line carry the lived-in clutter: shacks, tanks, dishes,
   // antennas, plastic chairs, potted trees, solar panels, umbrellas.
-  const SHEET = [0x2f8f86, 0xa5502f, 0x3566a8, 0xb04a7a, 0x6a7a3a];
+  const SHEET = [0x9c4a5c, 0x5d7fa0, 0x8a6a5a, 0xa85a64, 0x6f8fae, 0x7a6a7a];
   const dish = (x, y, d, r = 0.7) => {
     box(0x2b2740, x - 0.05, x + 0.05, y, y + 1.1, d - 0.05, d + 0.05);
     addGeo(new THREE.CylinderGeometry(r, r * 0.25, 0.22, 10), 0xb9bfd0, x, y + 1.25, d, 0.9, R() * 6, 0);
@@ -782,7 +824,8 @@ export function buildWorld(scene, renderer) {
     const xf = face > 0 ? x - w / 2 - 0.03 : x + w / 2;                                     // lit window toward the run line
     glow([WARM, CYAN, 0xff5fa2][Math.floor(R() * 3)], xf, xf + 0.03, y + 1, y + 1.7, d - dp * 0.3, d + dp * 0.1);
     box(SHEET[Math.floor(R() * SHEET.length)], xf - 0.01, xf + 0.04, y + 0.1, y + 0.9, d + dp * 0.15, d + dp * 0.45);
-    if (R() < 0.6) box(0x7c8296, x - 0.4, x + 0.4, y + h + 0.13, y + h + 0.7, d - 0.4, d + 0.4);
+    if (R() < 0.6) box(0xc9c3c4, x - 0.4, x + 0.4, y + h + 0.13, y + h + 0.7, d - 0.4, d + 0.4);
+    lamp(x, y + h - 0.15, d - dp / 2, 'back', 2.4);
   };
   const stack = (x, y, d, face) => {                       // shacks piled two or three high with a ladder and a tarp
     let yy = y;
@@ -805,7 +848,7 @@ export function buildWorld(scene, renderer) {
   const terrace = (sx, half, top, d0, d1, w = 5.5) => {
     const xa = sx > 0 ? half + 0.3 : -half - 0.3 - w, xb = xa + w, cx = (xa + xb) / 2;
     winBox(Math.floor(R() * 3), xa + 0.2, xb - 0.2, 0, top - 0.7, d0 + 0.6, d1 - 0.6);
-    slab(0x2b2644, xa, xb, top - 0.7, top - 0.3, d0 + 0.4, d1 - 0.4);
+    slab(0x645c6c, xa, xb, top - 0.7, top - 0.3, d0 + 0.4, d1 - 0.4);
     box(0x1b1730, sx > 0 ? xb - 0.25 : xa, sx > 0 ? xb : xa + 0.25, top - 0.3, top + 0.3, d0 + 0.4, d1 - 0.4);
     const y = top - 0.3;
     let prev = -1;
@@ -841,6 +884,18 @@ export function buildWorld(scene, renderer) {
   }
   sign('SLIDE', 5, 1.8, 0, 26.6, 611, 'back', { fg: '#f2f2ff', sub: '▼ TIN ROOF ▼' });
   for (const x of [-2.6, 2.6]) box(0x15121f, x - 0.08, x + 0.08, 21, 25.8, 610.9, 611.1);
+
+  // warm wall lamps (sodium glow) along the big walls, the market and the bank facade
+  for (let d = 262; d < 436; d += 22) { lamp(-13, 30.5, d, 'left', 5); lamp(12, 22, d + 9, 'right', 5); }
+  for (let d = 296; d < 420; d += 31) if (d < 346 || d > 362) lamp(-4, 18.6, d, 'left', 3.6);
+  for (const x of [-11, 11]) lamp(x, 31, -0.2, 'back', 5);
+  for (const [x, y, d] of [[-9.5, 23, 55.6], [9.6, 21, 105.6], [-10, 19, 175.6]]) lamp(x, y, d, 'back', 3);
+  // distant elevated lines curving through the haze
+  for (const [x, y, d, rad, rot] of [[-260, 34, 700, 240, 0.4], [300, 46, 1050, 300, 2.6], [-180, 40, 1250, 220, 5.2]]) {
+    const tg = new THREE.TorusGeometry(rad, 2.4, 5, 40, Math.PI * 0.75); tg.rotateX(Math.PI / 2); tg.rotateY(rot);
+    addGeo(tg, 0x5a4f66, x, y, d);
+    for (let k = 0; k < 6; k++) { const a = rot + (k / 5) * Math.PI * 0.75, px = x + Math.cos(a) * rad, pd = d + Math.sin(a) * rad; box(0x4c4456, px - 1.5, px + 1.5, 0, y, pd - 1.5, pd + 1.5); }
+  }
 
   B.build();
 
@@ -902,25 +957,25 @@ export function buildWorld(scene, renderer) {
   scene.add(van);
 
   // ---------------------------------------------------------------- lights
-  const hemi = new THREE.HemisphereLight(0x8fb0e8, 0x1c1626, 1.0); scene.add(hemi);
-  const key = new THREE.DirectionalLight(0xffc4b0, 1.9); scene.add(key); scene.add(key.target);
+  const hemi = new THREE.HemisphereLight(0xc9a2e6, 0x6a4a66, 1.25); scene.add(hemi);
+  const key = new THREE.DirectionalLight(0xffb27a, 2.6); scene.add(key); scene.add(key.target);       // low sunset sun
   key.shadow.mapSize.set(1024, 1024);
   Object.assign(key.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30, near: 1, far: 240 });
   key.shadow.bias = -0.0005; key.shadow.normalBias = 0.06;
-  const rim = new THREE.DirectionalLight(0x4be3ff, 0.9); rim.position.set(40, 30, -60); scene.add(rim);
+  const rim = new THREE.DirectionalLight(0xb07ae0, 0.7); rim.position.set(-50, 40, 60); scene.add(rim);    // cool purple fill from behind
 
   // Image-based lighting from a tiny neon "studio" so wet roofs and chrome have something to reflect.
   if (renderer) {
     const env = new THREE.Scene();
     const skyTex = scene.getObjectByName('sky').material.map;
     env.add(new THREE.Mesh(new THREE.SphereGeometry(100, 16, 12), new THREE.MeshBasicMaterial({ map: skyTex, side: THREE.BackSide })));
-    for (const [c, x, y, z, w, h] of [[0xff3df0, -40, 6, -30, 30, 14], [0x39f0ff, 45, 10, -20, 30, 18], [0xffb347, 10, 2, 50, 40, 8], [0xff9be8, -20, 45, -70, 26, 26], [0x8b5cff, 30, 20, 60, 30, 20]]) {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: new THREE.Color(c).multiplyScalar(3.5), side: THREE.DoubleSide }));
+    for (const [c, x, y, z, w, h] of [[0xff9a6a, 40, 8, -60, 50, 16], [0xff7aa8, -45, 12, -40, 34, 16], [0xffc890, 60, 4, 10, 30, 8], [0x9a6ad8, -20, 50, 60, 30, 24]]) {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: new THREE.Color(c).multiplyScalar(2.2), side: THREE.DoubleSide }));
       m.position.set(x, y, z); m.lookAt(0, 0, 0); env.add(m);
     }
     const pm = new THREE.PMREMGenerator(renderer);
     scene.environment = pm.fromScene(env, 0.03).texture;
-    scene.environmentIntensity = 0.55;
+    scene.environmentIntensity = 0.75;
     pm.dispose();
   }
 
@@ -936,10 +991,9 @@ export function buildWorld(scene, renderer) {
         else if (k === 'wet') mesh.material = low ? lamMat : wetMat;
       }
       key.castShadow = level === 'high';
-      hemi.intensity = low ? 1.5 : 1.0; key.intensity = low ? 1.3 : 1.9;
+      hemi.intensity = low ? 1.6 : 1.25; key.intensity = low ? 2.2 : 2.6;
     },
     update(time, playerD) {
-      beams.forEach((b, i) => { b.rotation.z = Math.sin(time * 0.23 + i * 1.7) * 0.5; b.rotation.x = Math.cos(time * 0.17 + i * 2.3) * 0.4; });
       alarmMat.color.setHex(Math.floor(time * 3) % 2 ? 0xff2030 : 0x4a0a10);
       train.position.z = -(((time * 26) % 1150) - 190);
       crossTrain.position.x = playerD > 500 + S ? -160 + ((time * 34) % 420) : -400;
