@@ -3,7 +3,8 @@
 A third-person parkour getaway in the browser. You've just robbed Kumo Bank and
 have $50,000 in an overstuffed backpack; kick through the window and reach the
 getaway vehicle with as much of it as you can. Two handcrafted jobs, picked from the
-title screen: **Glass District** (neon rooftops, about 75 seconds) and **Iron Harbor**
+title screen: **Glass District** (neon rooftops with fan launchers, zip lines and a
+wall-to-wall chain, about a minute) and **Iron Harbor**
 (a rain-soaked container port across the bay, about 65 seconds).
 
 Built with Three.js + Vite. All art, text and sound are generated at runtime — no
@@ -33,6 +34,7 @@ npm run dev      # prints a local URL and a network URL (open that on a phone / 
 - **Wall run:** jump beside the yellow billboard and steer into it; jump again on the KICK panel.
 - **Roll:** tap slide just before landing from a long drop to keep your speed.
 - **Perfect moves:** vault at the last moment, slide just before an overhead obstacle, or roll right at touchdown for a bigger speed burst. Perfect moves within about 6 seconds of each other chain into a combo that raises the boost further; a stumble or hard landing breaks it.
+- **Fans, zip lines, kickers:** run onto a rooftop fan to be thrown up a level; run into a zip handle to ride the cable down (jump lets go early); kicker ramps launch you off the lip with no input.
 - **Slopes:** slide on a downhill roof and you ride it to the bottom at extra speed, and keep that speed off the lip.
 - Clip an obstacle and a $2,500 bundle flies out — chase it down to get it back.
   Falling off the route costs $5,000 and puts you back at the last checkpoint.

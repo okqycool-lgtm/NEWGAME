@@ -30,9 +30,9 @@ const marketTime = r.time;
 r = await run({ route: 'roof', retry: true });
 if (verbose) console.log(JSON.stringify(r, null, 1));
 check('rooftop route reaches the van', r.state === 'finish', `time ${r.time}s cash ${r.cash} | ${r.tricks} | ${r.lands}`);
-check('rooftop used wall run + kick-off and stayed on the roofs', /wallrun:1/.test(r.tricks) && /kickoff:1/.test(r.tricks) && r.minYMid > 20 && r.stats.falls === 0);
+check('high line chains both walls and stays on the roofs', /wallrun:2/.test(r.tricks) && /kickoff:2/.test(r.tricks) && r.minYMid > 15 && r.stats.falls === 0);
 check('rooftop is the faster line', r.time < marketTime, `${r.time}s vs ${marketTime}s`);
-check('level length is 60–90 s', r.time >= 55 && marketTime <= 90, `${r.time}s / ${marketTime}s`);
+check('level length is roughly a minute', r.time >= 50 && marketTime <= 90, `${r.time}s / ${marketTime}s`);
 check('retry reset the run (full cash, fresh timer)', r.maxCash === 50000 && r.cashLog.length === 0);
 
 r = await run({ route: 'roof', kick: false, retry: true });
@@ -47,7 +47,7 @@ check('clip drops exactly $2,500 then recovers it once', c.length === 2 && c[0].
 r = await run({ route: 'market', vaultAC: false, chase: false, retry: true });
 check('ignored bundle is lost exactly once', r.cashLog.length === 1 && r.cash === 47500 && r.stats.lost === 1 && r.stats.recovered === 0, JSON.stringify(r.cashLog));
 
-r = await run({ route: 'market', jumpGap1: false, retry: true, maxT: 30 });
+r = await run({ route: 'market', noDouble: true, retry: true, maxT: 30 });      // single-jumping the 11 m gap falls short
 const falls = r.notable.filter((e) => e.type === 'fall');
 check('fall respawns at checkpoint with one $5,000 penalty per fall', falls.length >= 1 && r.cashLog.length === falls.length && r.cashLog[0].cash === 45000, `${falls.length} falls, cash ${r.cash}, respawn d≈${r.cashLog[0]?.d}`);
 
@@ -56,8 +56,8 @@ check('slope slide rides to the bottom with extra speed', r.maxSlideSpeed > 15 &
 if (verbose) console.log(JSON.stringify(r.notable));
 
 // robot officer: one stumble starts an 8 s chase; a second stumble inside it ends the run
-r = await run({ route: 'market', vaultAC: false, chase: true, retry: true, stopD: 60 });
-check('a stumble puts the officer on your tail for ~8 s', r.chaseT > 6 && r.chaseT < 8, `chase left ${r.chaseT}s at d=60`);
+r = await run({ route: 'market', vaultAC: false, chase: true, retry: true, stopD: 34 });
+check('a stumble puts the officer on your tail for ~8 s', r.chaseT > 6 && r.chaseT < 8, `chase left ${r.chaseT}s at d=34`);
 r = await run({ route: 'market', vaultAC: false, chase: true, retry: true });
 check('surviving the chase lets the run finish', r.state === 'finish' && r.chaseT === 0 && r.cash === 50000);
 const bestBefore = await page.evaluate(() => [localStorage.getItem('cyberheist.bestCash'), localStorage.getItem('cyberheist.bestTime')].join());
@@ -74,7 +74,7 @@ r = await run({ route: 'market', retry: true, perfect: true });
 if (verbose) console.log(JSON.stringify({ plain: [plain.time, plain.topSpeed, plain.maxCombo], perfect: [r.time, r.topSpeed, r.maxCombo], notable: r.notable }));
 check('perfect vaults and slides chain into a combo', r.state === 'finish' && r.maxCombo >= 3 && plain.maxCombo === 0, `best chain x${r.maxCombo}`);
 check('perfect play is clearly faster', r.time < plain.time - 3 && r.cash === 50000, `time ${r.time}s vs ${plain.time}s`);
-r = await run({ route: 'market', retry: true, perfect: true, vaultAC: false, stopD: 60 });
+r = await run({ route: 'market', retry: true, perfect: true, vaultAC: false, stopD: 36 });
 check('a stumble breaks the combo', r.maxCombo === 0 || (await page.evaluate(() => __ch.player.combo)) === 0);
 
 // swipe gestures, driven with real pointer events against the stepped simulation

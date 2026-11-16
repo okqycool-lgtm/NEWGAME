@@ -5,6 +5,7 @@ window.runBot = function (opts) {
   const o = Object.assign({ route: 'market', kick: true, vaultAC: true, chase: true, jumpGap1: true, maxT: 150, retry: false }, opts);
   game.manual = true;
   if (!o.keep) resetRun(o.retry);
+  p.wallB = false;
   const log = [], cashLog = [];
   const emit0 = p.emit.bind(p);
   p.emit = (type, data) => { log.push({ type, d: +p.d.toFixed(1), x: +p.x.toFixed(1), y: +p.y.toFixed(1), t: +game.time.toFixed(2), kind: data && data.kind, why: data && data.why }); emit0(type, data); };
@@ -27,15 +28,15 @@ window.runBot = function (opts) {
     if (b && o.chase && b.d > d - 1) return b.x;
     if (b && !o.chase) return b.x > p.x ? p.x - 3 : p.x + 3;
     if (H) return harborX(d);
-    if (d < 185) return 0;
-    const low = d > 255 && d < 440 && p.y < 19.5;
+    const low = d > 258 && d < 430 && p.y < 12;
+    if (d < 222) return 0;
     if (o.route === 'roof' && !low) {
-      if (d < 222) return -3; if (d < 300) return -12.5; if (d < 326) return -6; if (d < 346) return -11; if (d < 436) return -8.5;
+      if (d < 236) return -8; if (d < 262) return -10.5; if (d < 300) return -2.5; if (d < 322) return -4.5; if (d < 336) return -9.5; if (d < 400) return -7;
     } else {
-      if (d < 212) return 2; if (d < 292) return 4; if (d < 306) return 0; if (d < 320) return 7; if (d < 334) return 4; if (d < 350) return 10.5;
-      if (d < 402) return 4; if (d < 417) return 1; if (d < 432) return 8;
+      if (d < 236) return 2; if (d < 286) return 5; if (d < 298) return 1; if (d < 312) return 8; if (d < 330) return 5; if (d < 342) return 10.5;
+      if (d < 376) return 5; if (d < 388) return 2; if (d < 400) return 9; if (d < 430) return 4;
     }
-    if (d < 530) return 0; if (d < 548) return 3; if (d < 596) return 2; if (d < 606) return -3; if (d < 676) return 0; if (d < 686) return 2; if (d < 744) return 0; if (d < 764) return -3; return 0;
+    return 0;
   };
   let maxSpeed = 0, topSpeed = 0, maxCombo = 0;
   while (t < o.maxT && game.state !== 'finish' && game.state !== 'busted' && !(o.stopD && p.d >= o.stopD)) {
@@ -46,7 +47,7 @@ window.runBot = function (opts) {
       const d = p.d;
       // vaults
       const v = p.grounded && p.findVault();
-      if (v && v.d0 - d < (o.perfect ? 1.4 : 2.7) && (o.vaultAC || v.d0 !== (H ? 44 : 46))) inp.jump = true;
+      if (v && v.d0 - d < (o.perfect ? 1.4 : 2.7) && (o.vaultAC || v.d0 !== (H ? 44 : 22))) inp.jump = true;
       // shutters
       const sh = L.colliders.find((c) => c.kind === 'over' && c.d0 - d < (o.perfect ? 2.4 : 4.3) && c.d1 - d > -1 && p.x + 0.4 > c.x0 && p.x - 0.4 < c.x1 && Math.abs(c.base - p.y) < 1);
       const slope = p.grounded && p.ground && p.ground.kind === 'ramp' && p.ground.yB < p.ground.yA && o.slopes !== false;
@@ -55,21 +56,26 @@ window.runBot = function (opts) {
       if (sh) { inp.slideHeld = true; if (!heldSlide) inp.slide = true; heldSlide = true; } else heldSlide = false;
       // gaps
       const gaps = H ? [[68.9, o.jumpGap1], [174.4, true], [360.6, o.route === 'roof'], [558.9, true], [584.9, true], [610.9, true]]
-        : [[148.6, o.jumpGap1], [350.6, o.route === 'roof'], [644.4, true], [723.4, true]];
+        : [[38.8, o.jumpGap1], [78.6, true], [568.6, true]];
       for (const [gd, on] of gaps) if (on && p.grounded && d >= gd && d < gd + 1.2 && p.y > (H ? 3 : 7)) inp.jump = true;
-      if (!H && !p.grounded && p.state === 'air' && !p.usedDouble && p.vy < -1 && ((d > 150 && d < 161 && o.jumpGap1) )) inp.jump = true;
+      if (!H && !p.grounded && p.state === 'air' && !p.usedDouble && p.vy < -1 && d > 80 && d < 91 && !o.noDouble) inp.jump = true;
       // wall run + kick
-      if (o.route === 'roof') {
-        const w0 = H ? 259 : 249, side = H ? 1 : -1, hug = H ? p.x > 11 : p.x < -11, wy = H ? 17 : 24, kickAt = H ? 289 : 279, floor = H ? 5 : 12, r0 = H ? 430 : 420;
-        if (p.grounded && d >= w0 && d < w0 + 3 && hug) { inp.jump = true; inp.steer = side; }
-        if (d > w0 && d < w0 + 36 && p.state === 'air' && p.y > wy && !p.kickT) inp.steer = side;
-        if (p.state === 'wallrun') { inp.steer = side; if (o.kick && d >= kickAt) inp.jump = true; }
-        // roll on the long drop
-        if (d > r0 && d < r0 + 20 && !p.grounded && p.vy < 0 && p.y - floor < 1.2) inp.slide = true;
+      if (o.route === 'roof' && H) {
+        if (p.grounded && d >= 259 && d < 262 && p.x > 11) { inp.jump = true; inp.steer = 1; }
+        if (d > 259 && d < 295 && p.state === 'air' && p.y > 17 && !p.kickT) inp.steer = 1;
+        if (p.state === 'wallrun') { inp.steer = 1; if (o.kick && d >= 289) inp.jump = true; }
+        if (d > 430 && d < 450 && !p.grounded && p.vy < 0 && p.y - 5 < 1.2) inp.slide = true;      // roll on the long drop
+      } else if (o.route === 'roof') {
+        // wall A on the left, kick across to wall B on the right, kick back onto the roofs
+        if (p.grounded && d >= 251 && d < 255 && p.x < -9) { inp.jump = true; inp.steer = -1; }
+        if (d > 251 && d < 274 && p.state === 'air' && p.y > 19 && !p.wallB && !p.kickT) inp.steer = -1;
+        if (p.state === 'wallrun' && p.wall.side < 0) { inp.steer = -1; if (o.kick && d >= 265) { inp.jump = true; p.wallB = true; } }
+        if (p.wallB && p.state === 'air' && d < 300 && p.y > 18.5 && !o.kickB) inp.steer = 1;
+        if (p.state === 'wallrun' && p.wall.side > 0) { inp.steer = 1; if (d >= 293) { inp.jump = true; o.kickB = true; } }
       }
       // van
       if (d > L.VAN.triggerD + 20 && p.grounded && game.vanD - d < 2.2) inp.jump = true;
-      if (d > (H ? 300 : 290) && d < (H ? 430 : 420)) minYMid = Math.min(minYMid, p.y);
+      if (d > (H ? 300 : 304) && d < (H ? 430 : 388)) minYMid = Math.min(minYMid, p.y);
     }
     tick(1 / 120, inp);
     t += 1 / 120;

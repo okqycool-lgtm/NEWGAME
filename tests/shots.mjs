@@ -9,8 +9,8 @@ await page.goto((process.env.URL || 'http://localhost:5173/') + '?gfx=' + (proce
 await page.waitForFunction(() => window.__ch);
 await page.addScriptTag({ content: bot });
 const want = (process.argv[2] || '').split(',').filter(Boolean);
-const spots = [['r1', 'market', 30], ['r2', 'market', 90], ['split2', 'market', 232], ['climb', 'market', 572], ['shanty', 'market', 584], ['slope', 'market', 622], ['slope2', 'market', 706],
-  ['n2', 'market', 662], ['f2', 'market', 745], ['road', 'market', 824], ['cop', 'market', 52, { vaultAC: false }], ['bust', 'market', 9999, { vaultAC: false, noSlide: true }]];
+const spots = [['a1', 'market', 12], ['fan', 'market', 112], ['fanup', 'market', 126], ['zip', 'market', 160], ['zipride', 'market', 190], ['split', 'market', 240], ['wallA', 'roof', 262], ['wallB', 'roof', 286],
+  ['high', 'roof', 312], ['zip2', 'roof', 410], ['market', 'market', 300], ['stack', 'market', 456], ['slope', 'market', 540], ['kicker', 'market', 600], ['end', 'market', 660]];
 for (const [name, route, stopD, extra] of spots) {
   if (want.length && !want.includes(name)) continue;
   await page.evaluate(([route, stopD, extra]) => { window.runBot({ route, stopD, retry: true, ...extra }); __ch.game.camBlend = 1; __ch.game.manual = name0(extra); function name0(e) { return !(e && e.noSlide); } }, [route, stopD, extra || null]);

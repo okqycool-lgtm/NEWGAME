@@ -180,6 +180,10 @@ export class Runner {
         T.shLx = T.shRx = 0.7; T.elL = T.elR = 0.9; T.hipRx = 1.7; T.knR = -1.9; T.hipLx = 0.2; T.knL = -0.4; T.torso = -0.6; T.bodyY = -0.25;
       }
       rate = 26;
+    } else if (st === 'zip') {                                   // hanging from the zip handle, legs trailing
+      T.shLx = T.shRx = 3.05; T.shLz = 0.18; T.shRz = -0.18; T.elL = T.elR = 0.1; T.pitch = 0.32; T.torso = 0.05; T.head = 0.25;
+      T.hipLx = -0.25 + 0.12 * s; T.hipRx = 0.35 - 0.12 * s; T.knL = -0.9; T.knR = -0.5; T.roll = 0.08 * s;
+      rate = 16;
     } else if (st === 'busted') {
       T.shLx = T.shRx = 3.0; T.shLz = -0.35; T.shRz = 0.35; T.elL = T.elR = 0.5; T.torso = 0.1; T.head = -0.2;
       T.hipLx = 0.2; T.hipRx = -0.1; T.knL = -0.3; T.knR = -0.2; T.bodyY = -0.05;

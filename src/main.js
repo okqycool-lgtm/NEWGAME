@@ -40,7 +40,7 @@ const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.55, 16),
 shadow.rotation.x = -Math.PI / 2;
 scene.add(shadow);
 const bundleMeshes = [];
-const HUM_SPOTS = L.LEVEL !== 1 ? [] : [[6.5, 196], [12, 284], [12, 309], [12, 335], [12, 360], [12, 386], [12, 411], [-9.5, 56], [9.6, 106], [-10, 176]];
+const HUM_SPOTS = true ? [] : [[6.5, 196], [12, 284], [12, 309], [12, 335], [12, 360], [12, 386], [12, 411], [-9.5, 56], [9.6, 106], [-10, 176]];
 
 // ---------------------------------------------------------------- persistent bests
 const LV = L.LEVEL === 1 ? '' : String(L.LEVEL);        // bests are kept per job
@@ -103,6 +103,10 @@ const PROMPTS = {
   wallrun: ['<b>JUMP</b> on the yellow <b>KICK</b> panel', '<b>Swipe up</b> on the yellow <b>KICK</b> panel'],
   roll: ['Long drop — tap <b>S</b> just before landing to <b>ROLL</b>', 'Long drop — <b>swipe down</b> just before landing to <b>ROLL</b>'],
   gap: ['<b>JUMP!</b>', '<b>JUMP!</b>'],
+  fan: ['<b>FAN</b> ahead — run onto it and it throws you up a level', '<b>FAN</b> ahead — run onto it and it throws you up a level'],
+  zip: ['<b>ZIP LINE</b> — run into the handle and hold on (<b>SPACE</b> lets go early)', '<b>ZIP LINE</b> — run into the handle and hold on (<b>swipe up</b> lets go early)'],
+  walls: ['Jump into the <b>left wall</b>, kick, then <b>steer right</b> into the next wall', 'Jump into the <b>left wall</b>, kick, then <b>steer right</b> into the next wall'],
+  kicker: ['<b>KICKER</b> — just run off the lip', '<b>KICKER</b> — just run off the lip'],
   split2: ['<b>◀ DOCK ALLEY</b> quayside · safer &nbsp;|&nbsp; <b>CRANE LINE ▶</b> hull run · fast', '<b>◀ DOCK ALLEY</b> quayside · safer &nbsp;|&nbsp; <b>CRANE LINE ▶</b> hull run · fast'],
   wall2: ['Jump at the hull and <b>steer right</b> into it', 'Jump at the hull and <b>steer right</b> into it'],
   hops: ['<b>CONTAINER HOPS</b> — jump each gap', '<b>CONTAINER HOPS</b> — jump each gap'],
@@ -226,8 +230,13 @@ function handleEvents() {
         sfx.play(e.type);
         if (e.perfect) perfectMove(e.type === 'vault' ? 'PERFECT VAULT' : 'PERFECT KICK-OFF', e.combo); else toast(TRICKS[e.type], 'trick');
         break;
-      case 'wallrun': case 'ledge': case 'bounce':
+      case 'wallrun': case 'ledge':
         sfx.play(e.type); toast(TRICKS[e.type], 'trick'); break;
+      case 'bounce':
+        sfx.play(e.fan ? 'launch' : 'bounce'); toast(e.fan ? 'FAN LAUNCH!' : TRICKS.bounce, 'trick'); if (e.fan) game.shake = 0.2; break;
+      case 'launch': sfx.play('launch'); toast('KICKER!', 'trick'); break;
+      case 'zip': sfx.play('zip'); toast('ZIP LINE', 'trick'); break;
+      case 'zipoff': sfx.play('jump'); break;
       case 'land':
         if (e.kind === 'roll') { sfx.play('roll'); if (e.perfect) perfectMove('PERFECT ROLL', e.combo); else toast('ROLL!', 'trick'); }
         else if (e.kind === 'hard') { sfx.play('hard'); game.shake = 0.35; toast('HARD LANDING', 'trick'); }
@@ -409,6 +418,7 @@ function present(rdt) {
   for (const [x, d] of HUM_SPOTS) hum = Math.max(hum, 1 - Math.hypot(x - player.x, d - player.d) / 16);
   sfx.setHum(game.state === 'play' ? hum : 0);
 
+  if (player.state === 'zip') fx.slide(sdt, player.x, player.y + 2.1, player.d - 0.4, player.speed);          // sparks off the trolley
   if (player.state === 'slide' && player.grounded && game.state === 'play') fx.slide(sdt, player.x, player.y, player.d, player.speed);
   // the shadow-casting light follows the runner (snapped so shadow edges don't shimmer)
   const sx = Math.round(player.x / 2) * 2, sy = Math.round(player.y / 2) * 2, sz = Math.round(-player.d / 2) * 2;

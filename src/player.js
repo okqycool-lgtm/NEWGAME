@@ -1,6 +1,6 @@
 // Runner controller: custom AABB physics tuned for an auto-runner.
 // No rendering here — the game reads state + events and animates from them.
-import { BASE_SPEED, colliders, walls, clampAt, killY, speedMult, checkpoints, VAN } from './level.js';
+import { BASE_SPEED, colliders, walls, zips, clampAt, killY, speedMult, checkpoints, VAN } from './level.js';
 
 export const HW = 0.35;      // half width
 export const HD = 0.3;       // half depth
@@ -42,7 +42,7 @@ export class Player {
       wall: null, wallT: 0, wallCd: 0, awayT: 0,
       peakY: 34, blockedT: 0, ghosts: new Set(), cp: checkpoints[0],
       phase: 0, firstLanding: true, frontLimit: Infinity, vanSpeed: VAN.speed,
-      vault: null, ledge: null, ground: null, djT: 9, landT: 9, landKind: '', steer: 0, glassBroken: false,
+      vault: null, ledge: null, ground: null, zip: null, zipCd: 0, zipSpeed: 0, landSoft: false, djT: 9, landT: 9, landKind: '', steer: 0, glassBroken: false,
     });
   }
 
@@ -52,7 +52,7 @@ export class Player {
       x: cp.x, y: cp.y, d: cp.d, vx: 0, vy: 0, speed: 4, grounded: true,
       usedDouble: false, jumpBuf: 0, slideBuf: 0, coyote: 0,
       invuln: 1.6, slowT: 0, hardT: 0, boostT: 0, stumbleT: 0, kickT: 0, assistT: 0, boostMul: 1.15, combo: 0, comboT: 0,
-      wall: null, wallCd: 0, peakY: cp.y, blockedT: 0, vault: null, ledge: null,
+      wall: null, wallCd: 0, peakY: cp.y, blockedT: 0, vault: null, ledge: null, zip: null, zipCd: 0, landSoft: false,
     });
     this.ghosts.clear();
     this.setState('run');
@@ -120,7 +120,7 @@ export class Player {
     this.steer = inp.steer;
     this.jumpBuf = inp.jump ? 0.14 : this.jumpBuf - dt;
     this.slideBuf = inp.slide ? 0.24 : this.slideBuf - dt;
-    for (const k of ['invuln', 'slowT', 'hardT', 'boostT', 'stumbleT', 'kickT', 'assistT', 'wallCd', 'coyote', 'comboT']) {
+    for (const k of ['invuln', 'slowT', 'hardT', 'boostT', 'stumbleT', 'kickT', 'assistT', 'wallCd', 'coyote', 'comboT', 'zipCd']) {
       if (this[k] > 0) this[k] -= dt;
     }
     if (this.comboT <= 0 && this.combo) this.combo = 0;
@@ -132,6 +132,7 @@ export class Player {
       case 'kick': return this.stepKick(dt);
       case 'ledge': return this.stepLedge(dt);
       case 'vault': this.moveLateral(dt, inp.steer); return this.stepVault(dt);
+      case 'zip': return this.stepZip(dt);
     }
 
     this.handleJump();
@@ -147,6 +148,7 @@ export class Player {
       if (this.state !== 'ledge' && this.state !== 'done') this.moveVertical(dt, inp);
     }
     this.phase += this.speed * dt * 1.3;
+    this.tryZip();
     this.postChecks(dt);
   }
 
@@ -345,7 +347,12 @@ export class Player {
         this.y = g.top; this.ground = g.c;
         if (g.c.kind === 'bounce') this.bounce(g.c);
       } else {
+        const g0 = this.ground;
         this.grounded = false; this.coyote = 0.11; this.vy = 0; this.peakY = this.y; this.ground = null;
+        if (g0 && g0.kick && this.d >= g0.d1 - 0.8) {          // kicker ramp: launched without pressing anything
+          this.vy = g0.kick; this.coyote = 0; this.usedDouble = false; this.trick(false);
+          this.setState('air'); this.emit('launch');
+        }
         if (this.state === 'run') this.setState('air');
       }
       return;
@@ -365,8 +372,8 @@ export class Player {
     this.y = g.top; this.vy = 0; this.grounded = true; this.usedDouble = false; this.ground = g.c;
     this.landT = 0; this.kickT = 0;
     if (g.c.kind === 'bounce') return this.bounce(g.c);
-    const first = this.firstLanding;
-    this.firstLanding = false;
+    const first = this.firstLanding || this.landSoft;
+    this.firstLanding = false; this.landSoft = false;
     if (fall >= ROLL_DROP && !first) {
       if (this.slideBuf > 0) {
         const perfect = this.slideBuf >= 0.24 - PERFECT_ROLL, combo = this.trick(perfect);
@@ -386,15 +393,48 @@ export class Player {
     this.emit('land', { kind: 'soft', fall });
   }
 
+  // Awnings carry the runner sideways to the safe line; fans (power set) throw them straight up.
   bounce(c) {
     this.grounded = false; this.usedDouble = false;
-    this.vy = 11.5; this.peakY = this.y;
-    if (Math.abs(this.x - c.targetX) > 1) {            // carry toward the safe line, whichever side it is on
+    this.vy = c.power || 11.5; this.peakY = this.y;
+    if (c.targetX !== undefined && Math.abs(this.x - c.targetX) > 1) {
       this.assistT = 0.9;
       this.assistVx = (c.targetX - this.x) / 0.9;
     }
+    if (c.power) this.landSoft = true;                 // a fan launch never ends in a hard landing
     this.setState('air');
-    this.emit('bounce');
+    this.emit('bounce', { fan: !!c.power });
+  }
+
+  // ---- zip lines: grab the handle at the start, ride the cable, jump to let go early
+  tryZip() {
+    if (this.zipCd > 0 || (this.state !== 'run' && this.state !== 'air' && this.state !== 'slide')) return;
+    for (const z of zips) {
+      if (this.d < z.d0 - 0.4 || this.d > z.d0 + 1.8) continue;
+      if (Math.abs(this.x - z.x0) > 2 || Math.abs(this.y - (z.y0 - 2.2)) > 1.8) continue;
+      this.zip = z; this.zipSpeed = Math.max(this.speed, 13); this.grounded = false; this.vy = 0; this.vx = 0; this.jumpBuf = 0;
+      this.setState('zip');
+      this.emit('zip');
+      return;
+    }
+  }
+  stepZip(dt) {
+    const z = this.zip;
+    this.zipSpeed = Math.min(21, this.zipSpeed + 10 * dt);
+    this.speed = this.zipSpeed;
+    this.d += this.zipSpeed * dt;
+    const k = clamp((this.d - z.d0) / (z.d1 - z.d0), 0, 1);
+    this.x += (z.x0 + (z.x1 - z.x0) * k - this.x) * Math.min(1, 10 * dt);
+    this.y = z.y0 + (z.y1 - z.y0) * k - 2.2 - Math.sin(Math.PI * k) * 1.3;
+    this.phase += this.zipSpeed * dt * 0.4;
+    const letGo = this.jumpBuf > 0 && k > 0.12;
+    if (k >= 1 || letGo) {
+      this.zip = null; this.zipCd = 1; this.jumpBuf = 0;
+      this.vy = letGo ? 7 : -1; this.peakY = this.y; this.usedDouble = false; this.landSoft = !letGo;
+      this.speed = Math.min(this.zipSpeed, 17); this.boostMul = Math.max(this.boostMul, 1.3); this.boostT = Math.max(this.boostT, 1.8);
+      this.setState('air');
+      this.emit('zipoff');
+    }
   }
 
   stepWall(dt, inp) {

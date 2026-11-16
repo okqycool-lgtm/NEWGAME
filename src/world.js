@@ -2,7 +2,7 @@
 // Everything is generated at runtime — no external assets.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { colliders, walls, LANDING_PAD, VAN, S, LEVEL } from './level.js';
+import { colliders, walls, zips, LANDING_PAD, VAN, LEVEL } from './level.js';
 import { buildHarbor } from './world2.js';
 
 export const ACCENT = 0xffd60a;        // runnable walls + reachable ledges
@@ -471,8 +471,7 @@ export function buildWorld(scene, renderer) {
     const { x0, x1, d0, d1 } = c, top = c.y1;
     switch (c.style) {
       case 'roof': {
-        const open = x1 === -4;                                   // rooftop line: right side opens onto the market
-        const m = open || c.noLip ? 0 : MARGIN, md1 = d0 === 161 ? 236 : d1;   // furnished service strip beside the lane
+        const m = c.margin ? MARGIN : 0, md1 = c.md1 ?? d1;   // furnished service strip beside the lane
         winBox(c.win ?? 0, x0 + 0.3 - m, x1 - 0.3 + m, 0, top - 0.5, d0 + 0.3, d1 - 0.3);
         slab(c.shanty ? 0xf2dcdc : 0xe8e0ea, x0, x1, top - 0.5, top, d0, d1);
         if (!c.noLip) {                                           // reachable ledge = accent
@@ -504,12 +503,13 @@ export function buildWorld(scene, renderer) {
         break;
       }
       case 'billboard': {
-        const w = walls[0];
-        box(0x15121f, x0, x1 - 0.06, c.y0, top + 0.3, d0, d1);
-        for (let d = d0 + 2; d < d1; d += 7.5) box(0x15121f, x0 + 0.3, x0 + 0.7, 19, c.y0, d, d + 0.4);
-        const m = new THREE.Mesh(new THREE.PlaneGeometry(d1 - d0, top - c.y0), new THREE.MeshBasicMaterial({ map: billboardTexture(w) }));
-        m.rotation.y = Math.PI / 2; m.position.set(x1 + 0.01, (c.y0 + top) / 2, -(d0 + d1) / 2);
+        const w = walls[c.wall ?? 0], left = w.side < 0;         // left = wall on the runner's left, face toward +x
+        box(0x15121f, left ? x0 : x0 + 0.06, left ? x1 - 0.06 : x1, c.y0, top + 0.3, d0, d1);
+        for (let d = d0 + 2; d < d1; d += 7.5) box(0x15121f, (left ? x0 + 0.3 : x0 + 0.2), (left ? x0 + 0.7 : x0 + 0.6), 8, c.y0, d, d + 0.4);
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(d1 - d0, top - c.y0), new THREE.MeshBasicMaterial({ map: billboardTexture(w, !left) }));
+        m.rotation.y = left ? Math.PI / 2 : -Math.PI / 2; m.position.set(left ? x1 + 0.01 : x0 - 0.01, (c.y0 + top) / 2, -(d0 + d1) / 2);
         scene.add(m);
+        glow(ACCENT, left ? x1 : x0 - 0.06, left ? x1 + 0.06 : x0, c.y0 - 0.12, c.y0, d0, d1);
         break;
       }
       case 'awning': {
@@ -518,6 +518,27 @@ export function buildWorld(scene, renderer) {
         let i = 0;
         for (let d = d0; d < d1; d += 2, i++) box(i % 2 ? 0xf5f1ff : ACCENT, x0, x1 + 0.5, top - 0.3, top, d, Math.min(d1, d + 2));
         glow(ACCENT, x1 + 0.5, x1 + 0.56, top - 0.5, top, d0, d1);
+        break;
+      }
+      case 'fan': {                              // industrial exhaust fan: step on it and get thrown up a level
+        winBox(1, x0 + 0.3, x1 - 0.3, 0, top - 0.6, d0, d1 + 3.6);
+        box(0x23202e, x0, x1, top - 0.6, top - 0.02, d0, d1);
+        const n = Math.max(1, Math.round((x1 - x0) / 5)), w = (x1 - x0) / n, rad = Math.min(w, d1 - d0) * 0.46;
+        for (let i = 0; i < n; i++) {
+          const fx = x0 + (i + 0.5) * w, fd = (d0 + d1) / 2;
+          cyl(0x0b0b12, rad, 0.06, fx, top - 0.02, fd, 'y', false, 20);
+          cyl(CYAN, rad * 1.04, 0.05, fx, top - 0.05, fd, 'y', true, 20);
+          for (let k = 0; k < 6; k++) boxR(0x565b78, rad * 1.8, 0.05, 0.45, fx, top + 0.02, fd, 0, (k * Math.PI) / 6 + 0.3, 0.12);
+          cyl(0x8d8590, rad * 0.2, 0.14, fx, top + 0.05, fd, 'y', false, 10);
+          for (const ry of [0, Math.PI / 2]) {                                              // updraft shimmer
+            const g = new THREE.PlaneGeometry(rad * 1.7, 7), uv = g.attributes.uv;
+            for (let k = 0; k < uv.count; k++) uv.setY(k, 1 - uv.getY(k));
+            g.translate(0, 3.5, 0); g.rotateY(ry); g.translate(fx, top, -fd);
+            B.push('cone1', coneMats[1], g, fd);
+          }
+        }
+        for (let k = 0; k < 3; k++) for (const sx of [-1, 1]) boxR(ACCENT, 1.7, 0.02, 0.26, (x0 + x1) / 2 + sx * 0.66, top + 0.01, d0 - 1.2 - k * 1.3, 0, sx * 0.6, 0, true);
+        glow(ACCENT, x0, x1, top - 0.1, top + 0.03, d0 - 0.08, d0 + 0.12); glow(ACCENT, x0, x1, top - 0.1, top + 0.03, d1 - 0.12, d1 + 0.08);
         break;
       }
       case 'alley': {
@@ -530,29 +551,30 @@ export function buildWorld(scene, renderer) {
       case 'tallwall': {
         winBox(0, x0, x1, 0, top, d0, d1);
         for (let y = 30; y < top; y += 5) glow(PURPLE, x1, x1 + 0.05, y, y + 0.12, d0, d1);
-        sign('HOTEL ZERO', 2.6, 12, x1 + 0.3, 33, 322, 'left', { fg: '#ff5fd2', vertical: true });
-        sign('NEO SODA', 2.4, 10, x1 + 0.3, 31, 396, 'left', { fg: '#39f0ff', vertical: true });
+        sign('HOTEL ZERO', 2.6, 12, x1 + 0.3, top - 12, d0 + (d1 - d0) * 0.42, 'left', { fg: '#ff5fd2', vertical: true });
+        sign('NEO SODA', 2.4, 10, x1 + 0.3, top - 14, d0 + (d1 - d0) * 0.82, 'left', { fg: '#39f0ff', vertical: true });
         break;
       }
       case 'aptwall': {
-        winBox(2, x0, x1, 18.2, top, d0, d1);
-        box(0x1a1528, x0, x1, 0, 18.2, d0, d1);
+        const dk = c.deck ?? 14;
+        winBox(2, x0, x1, dk + 4.2, top, d0, d1);
+        box(0x1a1528, x0, x1, 0, dk + 4.2, d0, d1);
         const shops = [WARM, 0xff5fa2, CYAN, WARM, 0xb388ff];
         let i = 0;
-        for (let d = 268; d < 436; d += 8.5, i++) {
-          glow(shops[i % 5], x0 - 0.04, x0, 14.25, 16.9, d, d + 6.2);                       // lit shopfront
-          box(0x0e0b18, x0 - 0.08, x0 - 0.04, 14.25, 16.9, d + 2.9, d + 3.3);
-          box([0xb3243b, 0x1f7f8f, 0x6a3fb8][i % 3], x0 - 0.35, x0, 17.1, 17.3, d - 0.3, d + 6.5);  // shop awning
-          if (i % 3 === 1) vending(x0 - 0.3, x0 + 0.4, 14, d + 6.6, d + 7.7, 'right');
-          if (i % 2 === 0) npc(x0 - 0.75, 14, d + 1 + R() * 4, [0x4b6bd6, 0xb04bd6, 0xd6a24b, 0x3aa39a][i % 4]);
+        for (let d = d0 + 28; d < d1 - 6; d += 8.5, i++) {
+          glow(shops[i % 5], x0 - 0.04, x0, dk + 0.25, dk + 2.9, d, d + 6.2);                       // lit shopfront
+          box(0x0e0b18, x0 - 0.08, x0 - 0.04, dk + 0.25, dk + 2.9, d + 2.9, d + 3.3);
+          box([0xb3243b, 0x1f7f8f, 0x6a3fb8][i % 3], x0 - 0.35, x0, dk + 3.1, dk + 3.3, d - 0.3, d + 6.5);  // shop awning
+          if (i % 3 === 1) vending(x0 - 0.3, x0 + 0.4, dk, d + 6.6, d + 7.7, 'right');
+          if (i % 2 === 0) npc(x0 - 0.75, dk, d + 1 + R() * 4, [0x4b6bd6, 0xb04bd6, 0xd6a24b, 0x3aa39a][i % 4]);
         }
-        for (let y = 21.2; y < top - 4; y += 6) for (let d = d0 + 4; d < d1 - 8; d += 13) {     // balconies
+        for (let y = dk + 7.2; y < top - 4; y += 6) for (let d = d0 + 4; d < d1 - 8; d += 13) {     // balconies
           box(0x221c38, x0 - 0.9, x0, y, y + 0.14, d, d + 5);
           glow(0x4a2f7a, x0 - 0.9, x0 - 0.86, y + 0.14, y + 0.9, d, d + 5);
           if (R() < 0.5) box(0x7c8296, x0 - 0.6, x0, y + 0.14, y + 0.8, d + 5.6, d + 6.6);      // wall AC
         }
         const names = [['NOODLE 24H', '#ffb347'], ['BAO', '#ff5fd2'], ['TEA', '#39f0ff'], ['RAMEN', '#ff6f5e'], ['ARCADE', '#b388ff']];
-        names.forEach(([t, fg], k) => sign(t, 1.9, 7.5, x0 - 0.5, 23 + (k % 2) * 2, 282 + k * 34, 'right', { fg, vertical: true }));
+        names.forEach(([t, fg], k) => sign(t, 1.9, 7.5, x0 - 0.5, dk + 9 + (k % 2) * 2, d0 + 36 + k * 30, 'right', { fg, vertical: true }));
         break;
       }
       case 'market': {
@@ -562,17 +584,27 @@ export function buildWorld(scene, renderer) {
         glow(MAGENTA, x0 + 0.05, x0 + 0.12, top, top + 0.03, d0, d1);
         glow(CYAN, x1 - 0.12, x1 - 0.05, top, top + 0.03, d0, d1);
         // closed shutters / pipes on the left wall (under the rooftop line)
-        for (let d = 292; d < 418; d += 9) {
-          if (d > 346 && d < 362) continue;
-          box(0x3a3d52, x0, x0 + 0.06, 14.2, 17.2, d, d + 5.5);
-          glow([MAGENTA, CYAN, PURPLE][Math.floor(d / 9) % 3], x0, x0 + 0.07, 17.3, 17.42, d, d + 5.5);
-          if (R() < 0.6) npc(x0 + 0.7, 14, d + 6.5 + R() * 1.5, [0xd64b6b, 0x4bd6a0, 0x8f8fa8][Math.floor(R() * 3)]);
+        for (let d = d0 + 28; d < d1 - 44; d += 9) {
+          box(0x3a3d52, x0, x0 + 0.06, top + 0.2, top + 3.2, d, d + 5.5);
+          glow([MAGENTA, CYAN, PURPLE][Math.floor(d / 9) % 3], x0, x0 + 0.07, top + 3.3, top + 3.42, d, d + 5.5);
+          if (R() < 0.6) npc(x0 + 0.7, top, d + 6.5 + R() * 1.5, [0xd64b6b, 0x4bd6a0, 0x8f8fa8][Math.floor(R() * 3)]);
         }
         break;
       }
-      case 'ramp': case 'tin': {
+      case 'ramp': case 'tin': case 'kicker': {
         const len = Math.hypot(d1 - d0, c.yB - c.yA), ang = Math.atan2(c.yB - c.yA, d1 - d0);
         const cy = (c.yA + c.yB) / 2, cd = (d0 + d1) / 2;
+        if (c.last) for (const sx of [-1, 1]) {                                          // rails closing in on the road lane
+          const lenB = Math.hypot(3.75, d1 - d0, c.yA - c.yB);
+          boxR(CYAN, 0.12, 0.12, lenB, sx * 4.12, (c.yA + c.yB) / 2 + 0.9, cd, ang, -Math.atan2(sx * -3.75, d1 - d0), 0, true);
+        }
+        if (c.style === 'kicker') {                                                       // launch ramp: run off the lip and fly
+          boxR(0x8a8290, x1 - x0, 0.3, len, (x0 + x1) / 2, cy - 0.16, cd, ang);
+          box(0x6f6672, x0, x1, c.yA - 0.5, c.yB - 0.2, d1 - 0.5, d1);
+          for (let k = 0.15; k < 1; k += 0.28) for (const sx of [-1, 1]) boxR(ACCENT, 2.6, 0.02, 0.32, (x0 + x1) / 2 + sx * 1.0, c.yA + (c.yB - c.yA) * k + 0.02, d0 + (d1 - d0) * k, ang, -sx * 0.6, 0, true);
+          glow(ACCENT, x0, x1, c.yB - 0.12, c.yB + 0.04, d1 - 0.3, d1 + 0.04);
+          break;
+        }
         if (c.style === 'tin') {
           // corrugated tin roof: coloured sheets with ridges running down the slope
           const cols = [0x9c4a5c, 0x5d7fa0, 0x8a3f52, 0x6f8fae, 0xa85a64, 0x54708f];        // rust red and faded blue sheets
@@ -604,16 +636,15 @@ export function buildWorld(scene, renderer) {
       case 'plaza': {
         box(0x161222, x0, x1, 0, top - 0.4, d0, d1);
         slab(0xdcd4de, x0, x1, top - 0.4, top, d0, d1);
-        if (d0 === 440) {
-          glow(ACCENT, -13, -4, top - 0.4, top + 0.02, 419.95, 420.5);
-          for (const [xa, xb] of [[-13, -6], [12, 6]]) {                                   // funnel rails
-            const ang = Math.atan2(xb - xa, 32), len = Math.hypot(xb - xa, 32);
-            boxR(EDGE, 0.3, 0.9, len, (xa + xb) / 2, top + 0.45, 456, 0, -ang, 0);
-            boxR(MAGENTA, 0.34, 0.08, len, (xa + xb) / 2, top + 0.92, 456, 0, -ang, 0, true);
+        if (c.funnel) {
+          const L = d1 - d0;
+          for (const [xa, xb] of c.funnel) {                                              // funnel rails
+            const ang = Math.atan2(xb - xa, L), len = Math.hypot(xb - xa, L);
+            boxR(EDGE, 0.3, 0.9, len, (xa + xb) / 2, top + 0.45, d0 + L / 2, 0, -ang, 0);
+            boxR(MAGENTA, 0.34, 0.08, len, (xa + xb) / 2, top + 0.92, d0 + L / 2, 0, -ang, 0, true);
           }
-          for (let d = 446; d < 470; d += 6) for (const sx of [-1, 1]) {                    // chevrons pointing in
-            boxR(0x1f6f8a, 2.4, 0.02, 0.3, sx * 3.2, top + 0.01, d, 0, sx * 0.7, 0, true);
-          }
+          for (let d = d0 + 6; d < d1 - 2; d += 6) for (const sx of [-1, 1]) boxR(0x1f6f8a, 2.4, 0.02, 0.3, sx * 3.2, top + 0.01, d, 0, sx * 0.7, 0, true);
+          glow(ACCENT, x0, x1, top - 0.4, top + 0.02, d0 - 0.05, d0 + 0.4);
         }
         break;
       }
@@ -627,11 +658,6 @@ export function buildWorld(scene, renderer) {
         break;
       }
     }
-  }
-  // final ramp funnel barriers
-  for (const sx of [-1, 1]) {
-    const ang = Math.atan2(sx * (2.25 - 6), 30), len = Math.hypot(3.75, 30, 8);
-    boxR(CYAN, 0.12, 0.12, len, sx * 4.12, 4.9, 637 + S, Math.atan2(-8, 30), -ang, 0, true);
   }
   // landing pad on the far roof (kick-off target)
   {
@@ -753,34 +779,43 @@ export function buildWorld(scene, renderer) {
   }
 
   // ---------------------------------------------------------------- route dressing
+  const find = (st) => colliders.find((c) => c.style === st);
+  const mk = find('market'), tall = find('tallwall'), apt = find('aptwall'), road = find('road');
+  const splitTop = colliders.find((c) => c.style === 'roof' && c.d1 === mk.d0 - 26)?.y1 ?? mk.y1 + 12, sd = mk.d0 - 26;
   // split signage — both lines visible before committing
-  sign('ROOFTOPS', 8, 2.6, -8.5, 31.2, 239, 'back', { fg: '#ffd60a', sub: '◀ WALL RUN · FAST' });
-  sign('NIGHT MARKET', 9, 2.6, 4.5, 30.6, 241, 'back', { fg: '#ff5fd2', sub: 'STREET · SAFE ▶' });
-  for (const x of [-12.3, -4.6]) box(0x15121f, x - 0.12, x + 0.12, 26, 31.2, 238.9, 239.1);
-  for (const x of [0.2, 8.8]) box(0x15121f, x - 0.12, x + 0.12, 26, 30.6, 240.9, 241.1);
-  // market gate
-  box(0x23202e, -4, -3.6, 14, 21, 267, 267.5); box(0x23202e, 11.6, 12, 14, 21, 267, 267.5);
-  sign('NIGHT MARKET', 15.6, 2.4, 4, 20.4, 267.2, 'back', { fg: '#ff5fd2', bg: '#1a0d2a' });
-  for (const d of [288, 306, 322, 338, 364, 388, 406, 420, 434]) laundry(-4, 12, 14 + 5.6 + (d % 3) * 0.5, d);
-  for (const d of [30, 70, 100, 140]) { laundry(-13.5, -6.3, 24.2, d); laundry(6.3, 14, 23.6, d + 7); }
-  for (const d of [500, 536, 586, 664, 694]) { if (d > 560) { const yy = d < 620 ? 21 : 13; for (const x of [-6.2, 6.2]) box(0x15121f, x - 0.08, x + 0.08, yy, yy + 5.4, d - 0.08, d + 0.08); laundry(-6.2, 6.2, yy + 5.3, d); continue; } for (const x of [-6.2, 6.2]) box(0x15121f, x - 0.08, x + 0.08, 12, 17.4, d - 0.08, d + 0.08); laundry(-6.2, 6.2, 17.3, d); }
-  // rooftop vending + water tanks beside the opening run (out of the lane)
-  for (const [x, d, top] of [[-9.5, 60, 20], [9.6, 110, 18], [-10, 180, 16]]) {
-    box(0x241f3a, x - 3, x + 3, 0, top, d - 6, d + 6);
-    cyl(0x4f4a78, 1.6, 2.6, x, top + 1.5, d, 'y', false, 10);
-    vending(x - 1.2, x + 1.2, top, d - 4, d - 3.3, 'back');
+  sign('ROOFTOPS', 8, 2.6, -6, splitTop + 6.6, sd - 1, 'back', { fg: '#ffd60a', sub: '◀ WALL TO WALL · FAST' });
+  sign('NIGHT MARKET', 9, 2.6, 5.5, splitTop + 4.6, sd + 1, 'back', { fg: '#ff5fd2', sub: 'STREET · SAFE ▶' });
+  for (const x of [-9.8, -2.2]) box(0x15121f, x - 0.12, x + 0.12, splitTop, splitTop + 6.6, sd - 1.1, sd - 0.9);
+  for (const x of [1.2, 9.8]) box(0x15121f, x - 0.12, x + 0.12, splitTop - 2, splitTop + 4.6, sd + 0.9, sd + 1.1);
+  // market gate + laundry lines
+  box(0x23202e, mk.x0, mk.x0 + 0.4, mk.y1, mk.y1 + 7, mk.d0 + 1, mk.d0 + 1.5); box(0x23202e, mk.x1 - 0.4, mk.x1, mk.y1, mk.y1 + 7, mk.d0 + 1, mk.d0 + 1.5);
+  sign('NIGHT MARKET', mk.x1 - mk.x0 - 0.4, 2.4, (mk.x0 + mk.x1) / 2, mk.y1 + 6.4, mk.d0 + 1.2, 'back', { fg: '#ff5fd2', bg: '#1a0d2a' });
+  for (let d = mk.d0 + 12, i = 0; d < mk.d1 - 34; d += 17, i++) laundry(mk.x0, mk.x1, mk.y1 + 5.6 + (i % 3) * 0.5, d);
+  // final sprint sign over the road
+  sign('GETAWAY', 7, 2.2, 0, 5.2, road.d0 - 0.4, 'back', { fg: '#35ff6b', sub: '▼ VAN ▼' });
+  for (const x of [-3.8, 3.8]) box(0x15121f, x - 0.1, x + 0.1, 0, 4.8, road.d0 - 0.5, road.d0 - 0.3);
+  // zip lines: gantry, cable, direction beads
+  for (const z of zips) {
+    const a = new THREE.Vector3(z.x0, z.y0, -z.d0), b = new THREE.Vector3(z.x1, z.y1, -z.d1), dir = b.clone().sub(a), len = dir.length();
+    const cable = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, len, 5), new THREE.MeshBasicMaterial({ color: 0x1a1622 }));
+    cable.position.copy(a).add(b).multiplyScalar(0.5); cable.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize()); scene.add(cable);
+    for (let k = 0.06; k < 1; k += 0.07) { const p = a.clone().lerp(b, k); glow(ACCENT, p.x - 0.09, p.x + 0.09, p.y - 0.09, p.y + 0.09, -p.z - 0.3, -p.z + 0.3); }
+    for (const sx of [-1, 1]) box(0x15121f, z.x0 + sx * 2.2 - 0.12, z.x0 + sx * 2.2 + 0.12, z.y0 - 2.4, z.y0 + 0.9, z.d0 - 0.7, z.d0 - 0.46);
+    box(0x15121f, z.x0 - 2.3, z.x0 + 2.3, z.y0 + 0.5, z.y0 + 0.9, z.d0 - 0.7, z.d0 - 0.46);
+    glow(ACCENT, z.x0 - 0.45, z.x0 + 0.45, z.y0 - 0.5, z.y0 - 0.36, z.d0 - 0.1, z.d0 + 0.1);                      // the handle
+    box(0x15121f, z.x0 - 0.03, z.x0 + 0.03, z.y0 - 0.4, z.y0, z.d0 - 0.03, z.d0 + 0.03);
+    sign('ZIP', 3, 1.3, z.x0, z.y0 + 1.7, z.d0 - 0.6, 'back', { fg: '#ffd60a', sub: '▼ HOLD ON ▼' });
+    for (const sx of [-1, 1]) box(0x15121f, z.x1 + sx * 1.6 - 0.1, z.x1 + sx * 1.6 + 0.1, z.y1 - 3.4, z.y1 + 0.4, z.d1 + 3.2, z.d1 + 3.4);
+    box(0x15121f, z.x1 - 1.7, z.x1 + 1.7, z.y1 + 0.2, z.y1 + 0.5, z.d1 + 3.2, z.d1 + 3.4);
   }
-  // final sprint signs
-  sign('GETAWAY', 7, 2.2, 0, 12.8, 621.6 + S, 'back', { fg: '#35ff6b', sub: '▼ VAN ▼' });
-  for (const x of [-3.8, 3.8]) box(0x15121f, x - 0.1, x + 0.1, 8, 12.4, 621.5 + S, 621.7 + S);
 
   // ---------------------------------------------------------------- elevated rail
   box(0x2b2740, -30.2, -26.8, 19, 20, -120, 900);
   glow(CYAN, -30.25, -30.2, 19.4, 19.6, -120, 900); glow(CYAN, -26.8, -26.75, 19.4, 19.6, -120, 900);
   for (let d = -110; d < 900; d += 32) box(0x211d33, -29.2, -27.8, 0, 19, d, d + 1.6);
-  box(0x2b2740, -80, 80, 16.4, 17.4, 594.4 + S, 597.6 + S);
-  glow(MAGENTA, -80, 80, 16.9, 17.05, 594.3 + S, 594.4 + S);
-  for (const x of [-34, -9, 9, 34]) box(0x211d33, x - 0.7, x + 0.7, 0, 16.4, 595.3 + S, 596.7 + S);
+  box(0x2b2740, -80, 80, 16.4, 17.4, 638.4, 641.6);
+  glow(MAGENTA, -80, 80, 16.9, 17.05, 638.3, 638.4);
+  for (const x of [-34, -9, 9, 34]) box(0x211d33, x - 0.7, x + 0.7, 0, 16.4, 639.3, 640.7);
   const makeTrain = (alongX) => {
     const g = new THREE.Group();
     for (let i = 0; i < 5; i++) {
@@ -797,7 +832,7 @@ export function buildWorld(scene, renderer) {
     return g;
   };
   const train = makeTrain(false), crossTrain = makeTrain(true);
-  train.position.set(-28.5, 21.6, 0); crossTrain.position.set(-400, 19, -(596 + S));
+  train.position.set(-28.5, 21.6, 0); crossTrain.position.set(-400, 19, -640);
 
   // ---------------------------------------------------------------- city blocks
   // Megastructure blocks: concrete podium, set-back tiers, heavy floor bands, service clutter and neon.
@@ -971,9 +1006,10 @@ export function buildWorld(scene, renderer) {
       block('f', sx, sx > 0 ? n2 : -n2 - w2, sx > 0 ? n2 + w2 : -n2, d + 2, d + len - 2, 60 + R() * 110);
     }
     // low filler blocks between the route and the avenues (kept well below the run line)
-    if (d < 225 || d > 475) {
-      const routeTop = d < 80 ? 28 : d < 240 ? 26 : d < 560 ? 12 : d < 730 ? 9 : d < 640 + S ? 8 : 0;
-      const half = d > 160 && d < 240 ? 12 : 6;
+    if (d < 205 || d > 436) {
+      let routeTop = 0; for (const c of colliders) if ((c.style === 'roof' || c.style === 'plaza' || c.kind === 'ramp') && c.d0 <= d + 30 && c.d1 >= d - 10) routeTop = Math.max(routeTop, c.kind === 'ramp' ? Math.min(c.yA, c.yB) : c.y1);
+      routeTop = Math.min(routeTop, 26);
+      const half = 6;
       const h = Math.max(0, routeTop - 10 - R() * 5);
       if (h > 2 && d > 4) for (const sx of [-1, 1]) {
         const xa = half + 9, xb = 24;
@@ -1159,26 +1195,25 @@ export function buildWorld(scene, renderer) {
       d += 1 + R() * 3;
     }
   };
-  for (const [half, top, d0, d1] of [[6, 28, 1, 80], [6, 26, 80, 150], [12, 26, 161, 236], [6, 12, 472, 560], [6, 21, 580, 612], [6, 13, 655, 700], [6, 8, 570 + S, 622 + S]]) { strip(-1, half, top, d0, d1); strip(1, half, top, d0, d1); }
-  for (const [half, top, d0, d1] of [[6, 28, 1, 80], [6, 26, 80, 150], [12, 26, 161, 236], [6, 12, 472, 560], [6, 21, 580, 612], [6, 13, 655, 700], [6, 8, 570 + S, 622 + S]]) {
-    terrace(-1, half, top, d0, d1); terrace(1, half, top, d0, d1);
-  }
+  const furnished = colliders.filter((c) => c.margin).map((c) => [c.x1, c.y1, c.d0, c.md1 ?? c.d1]);
+  for (const [half, top, d0, d1] of furnished) if (d1 - d0 > 14) { strip(-1, half, top, d0, d1); strip(1, half, top, d0, d1); terrace(-1, half, top, d0, d1); terrace(1, half, top, d0, d1); }
   // steel pergola frames with hanging planters over the shanty roofs (above head height)
-  for (const [d, y] of [[584, 21], [606, 21], [660, 13], [696, 13]]) {
-    for (const x of [-6.1, 6.1]) box(0x24524c, x - 0.1, x + 0.1, y, y + 5.2, d - 0.1, d + 0.1);
-    box(0x24524c, -6.2, 6.2, y + 5.1, y + 5.3, d - 0.1, d + 0.1);
-    for (let x = -5; x < 5.5; x += 2.4) { box(0x2f7a52, x - 0.3, x + 0.3, y + 4.5, y + 5.1, d - 0.25, d + 0.25); }
-    glow([CYAN, 0xff5fa2][Math.floor(d) % 2], -6.2, 6.2, y + 5.3, y + 5.36, d - 0.1, d + 0.1);
+  for (const [d, y] of colliders.filter((c) => c.shanty).flatMap((c) => [[c.d0 + 5, c.y1], [c.d1 - 6, c.y1]])) {
+    for (const x of [-6.1, 6.1]) box(0x24524c, x - 0.1, x + 0.1, y, y + 6.4, d - 0.1, d + 0.1);
+    box(0x24524c, -6.2, 6.2, y + 6.3, y + 6.5, d - 0.1, d + 0.1);
+    for (let x = -5; x < 5.5; x += 2.4) { box(0x2f7a52, x - 0.3, x + 0.3, y + 5.7, y + 6.3, d - 0.25, d + 0.25); }
+    glow([CYAN, 0xff5fa2][Math.floor(d) % 2], -6.2, 6.2, y + 6.5, y + 6.56, d - 0.1, d + 0.1);
   }
-  sign('SLIDE', 5, 1.8, 0, 26.6, 611, 'back', { fg: '#f2f2ff', sub: '▼ TIN ROOF ▼' });
-  for (const x of [-2.6, 2.6]) box(0x15121f, x - 0.08, x + 0.08, 21, 25.8, 610.9, 611.1);
+  for (const c of colliders.filter((c) => c.style === 'tin')) {
+    sign('SLIDE', 5, 1.8, 0, c.yA + 6.4, c.d0 - 0.5, 'back', { fg: '#f2f2ff', sub: '▼ TIN ROOF ▼' });
+    for (const x of [-2.6, 2.6]) box(0x15121f, x - 0.08, x + 0.08, c.yA, c.yA + 5.6, c.d0 - 0.6, c.d0 - 0.4);
+  }
 
   // warm wall lamps (sodium glow) along the big walls, the market and the bank facade
-  for (let d = 262, i = 0; d < 436; d += 22, i++) { lamp(-13, 30.5, d, 'left', 6, [2, 0, 3][i % 3]); lamp(12, 22, d + 9, 'right', 6, [1, 0, 2][i % 3]); }
-  pool(-4, 4, 14, 268, 438, 2); pool(12, 4, 14, 268, 438, 1);                       // the market swims in pink and cyan
-  for (let d = 296; d < 420; d += 31) if (d < 346 || d > 362) lamp(-4, 18.6, d, 'left', 3.6);
+  for (let d = tall.d0 + 10, i = 0; d < tall.d1 - 6; d += 22, i++) { lamp(tall.x1, mk.y1 + 26, d, 'left', 6, [2, 0, 3][i % 3]); lamp(apt.x0, mk.y1 + 8, d + 9, 'right', 6, [1, 0, 2][i % 3]); }
+  pool(mk.x0, mk.x0 + 7, mk.y1, mk.d0 + 2, mk.d1 - 2, 2); pool(mk.x1, mk.x1 - 7, mk.y1, mk.d0 + 2, mk.d1 - 2, 1);        // the market swims in pink and cyan
+  for (let d = mk.d0 + 24; d < mk.d1 - 44; d += 31) lamp(mk.x0, mk.y1 + 4.6, d, 'left', 3.6);
   for (const x of [-11, 11]) lamp(x, 31, -0.2, 'back', 5);
-  for (const [x, y, d] of [[-9.5, 23, 55.6], [9.6, 21, 105.6], [-10, 19, 175.6]]) lamp(x, y, d, 'back', 3);
   // distant elevated lines curving through the haze
   for (const [x, y, d, rad, rot] of [[-260, 34, 700, 240, 0.4], [300, 46, 1050, 300, 2.6], [-180, 40, 1250, 220, 5.2]]) {
     const tg = new THREE.TorusGeometry(rad, 2.4, 5, 40, Math.PI * 0.75); tg.rotateX(Math.PI / 2); tg.rotateY(rot);
@@ -1200,7 +1235,7 @@ export function buildWorld(scene, renderer) {
   // flying traffic between the towers
   lane('d', -17, 1, -130, 1250, 7, 44, 64); lane('d', 21, -1, -130, 1250, 7, 50, 78); lane('d', -52, -1, -130, 1250, 6, 38, 104); lane('d', 58, 1, -130, 1250, 6, 42, 92);
   lane('x', 310, 1, -260, 260, 6, 40, 70); lane('x', 540, -1, -260, 260, 6, 46, 58); lane('x', 800, 1, -260, 260, 6, 40, 52); lane('x', 120, -1, -260, 260, 5, 44, 88);
-  lane('d', 5.4, 1, 655 + S, 1250, 9, 15); lane('d', -5.4, -1, 655 + S, 1250, 9, 17);
+  lane('d', 5.4, 1, 690, 1250, 9, 15); lane('d', -5.4, -1, 690, 1250, 9, 17);
   const traffic = new THREE.InstancedMesh(new THREE.BoxGeometry(1.7, 0.7, 3.8), new THREE.MeshBasicMaterial(), lanes.length);
   traffic.frustumCulled = false;
   const tail = new THREE.Color(0xff2b3b), headl = new THREE.Color(0xfff3c9), side = new THREE.Color(0xffa63d);
@@ -1286,7 +1321,7 @@ export function buildWorld(scene, renderer) {
     update(time, playerD) {
       alarmMat.color.setHex(Math.floor(time * 3) % 2 ? 0xff2030 : 0x4a0a10);
       train.position.z = -(((time * 26) % 1150) - 190);
-      crossTrain.position.x = playerD > 500 + S ? -160 + ((time * 34) % 420) : -400;
+      crossTrain.position.x = playerD > 520 ? -160 + ((time * 34) % 420) : -400;
       lanes.forEach((l, i) => {
         const span = l.b - l.a;
         let p = (l.off + time * l.speed) % span; if (l.dir < 0) p = span - p;
