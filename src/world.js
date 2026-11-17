@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { colliders, walls, zips, LANDING_PAD, VAN, LEVEL } from './level.js';
 import { buildHarbor } from './world2.js';
+import { makeTraffic } from './traffic.js';
 
 export const ACCENT = 0xffd60a;        // runnable walls + reachable ledges
 const CYAN = 0x39f0ff, MAGENTA = 0xff3df0, PURPLE = 0x8b5cff, HAZARD = 0xff3b30, WARM = 0xffb347;
@@ -246,7 +247,7 @@ export class Batch {
     for (const { key, material, list } of this.groups.values()) {
       const mesh = new THREE.Mesh(mergeGeometries(list, false), material);
       mesh.matrixAutoUpdate = false;
-      mesh.castShadow = key === 'lit' || key === 'wet' || key === 'deck' || key.startsWith('win'); mesh.receiveShadow = mesh.castShadow;
+      mesh.castShadow = key === 'lit' || key === 'wet' || key === 'deck' || key.startsWith('win') || key.startsWith('glb:'); mesh.receiveShadow = mesh.castShadow;
       this.meshes.push({ key, mesh });
       this.scene.add(mesh);
       list.forEach((g) => g.dispose());
@@ -255,10 +256,39 @@ export class Batch {
   }
 }
 
-export function buildWorld(scene, renderer) {
-  if (LEVEL === 2) return buildHarbor(scene, renderer);
+// Places Blender-built props into a Batch: `prop` drops a copy of a model node at a spot, `fit`
+// stretches one to fill a collider box. Both return false when the model isn't loaded so callers
+// can fall back to the procedural boxes. Models face +Z (toward the approaching runner) at ry = 0.
+export function propPlacer(B, assets) {
+  const M = new THREE.Matrix4(), P = new THREE.Vector3(), Q = new THREE.Quaternion(), S = new THREE.Vector3(), E = new THREE.Euler(), sz = new THREE.Vector3(), tc = new THREE.Color();
+  let useLod = false;                    // dressing away from the lane uses the decimated _LOD1 copies
+  const prop = (name, x, y, d, { ry = 0, s = 1, sx = s, sy = s, sz: szz = s, tint = null, file = 'props', rx = 0, rz = 0, lod = useLod } = {}) => {
+    const src = (lod && assets?.geo(file, name + '_LOD1')) || assets?.geo(file, name);
+    if (!src) return false;
+    const g = src.clone();
+    g.applyMatrix4(M.compose(P.set(x, y, -d), Q.setFromEuler(E.set(rx, ry, rz)), S.set(sx, sy, szz)));
+    if (tint !== null && g.attributes.color) {
+      const col = g.attributes.color; tc.set(tint);
+      for (let i = 0; i < col.count; i++) col.setXYZ(i, col.getX(i) * tc.r, col.getY(i) * tc.g, col.getZ(i) * tc.b);
+    }
+    B.push('glb:' + file, assets.mat(file), g, d);
+    return true;
+  };
+  const fit = (name, x0, x1, y0, y1, d0, d1, opts = {}) => {
+    if (!assets?.size('props', name, sz)) return false;
+    const turned = Math.abs(Math.sin(opts.ry ?? 0)) > 0.7;             // quarter turn swaps the footprint axes
+    return prop(name, (x0 + x1) / 2, y0, (d0 + d1) / 2, { ...opts, sx: (turned ? d1 - d0 : x1 - x0) / sz.x, sy: (y1 - y0) / sz.y, sz: (turned ? x1 - x0 : d1 - d0) / sz.z });
+  };
+  // hand merged prop meshes to the asset manager so they follow the quality level
+  const track = () => { for (const { key, mesh } of B.meshes) if (key.startsWith('glb:')) assets.track(key.slice(4), mesh); };
+  return { prop, fit, track, lod: (v) => { useLod = v; } };
+}
+
+export function buildWorld(scene, renderer, assets) {
+  if (LEVEL === 2) return buildHarbor(scene, renderer, assets);
   const R = rng(20771);
   const B = new Batch(scene);
+  const { prop, fit, track, lod } = propPlacer(B, assets);
   const lamMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
   const litMat = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.72, metalness: 0.12 });
   const roofMap = roofTexture();
@@ -383,6 +413,11 @@ export function buildWorld(scene, renderer) {
     box(0xd9a583, x - 0.13, x + 0.13, y + 1.47, y + 1.74, d - 0.13, d + 0.13);
   };
   const vending = (x0, x1, base, d0, d1, face) => {
+    if (face === 'back') {
+      const n = Math.max(1, Math.round((x1 - x0) / 1.0)), w = (x1 - x0) / n;
+      let ok = true; for (let i = 0; i < n; i++) ok = fit('Vending', x0 + i * w + 0.03, x0 + (i + 1) * w - 0.03, base, base + 2.0, d0, d1) && ok;
+      if (ok) return;
+    } else if (fit('Vending', x0, x1, base, base + 2.0, d0, d1, { ry: face === 'right' ? -Math.PI / 2 : Math.PI / 2 })) return;
     box(0x15151f, x0, x1, base, base + 2.0, d0, d1);
     const cols = [CYAN, MAGENTA, 0x7dffb0];
     if (face === 'back') {
@@ -678,6 +713,7 @@ export function buildWorld(scene, renderer) {
         const n = Math.max(1, Math.round((x1 - x0) / 2.3)), w = (x1 - x0) / n;
         for (let i = 0; i < n; i++) {
           const xa = x0 + i * w + 0.08, xb = x0 + (i + 1) * w - 0.08, r = Math.min(0.34, (xb - xa) * 0.2);
+          if (fit('ACUnit', xa, xb, b, c.y1, d0, d1)) continue;
           box(0xc9c3c4, xa, xb, b + 0.08, c.y1, d0, d1);
           box(0x6e6672, xa + 0.1, xb - 0.1, b, b + 0.08, d0 + 0.1, d1 - 0.1);                    // pallet feet
           for (const fx of [(xa * 3 + xb) / 4, (xa + xb * 3) / 4]) {                              // fan grilles
@@ -694,6 +730,7 @@ export function buildWorld(scene, renderer) {
       case 'crate': {
         const n = Math.max(1, Math.round((x1 - x0) / 1.4)), w = (x1 - x0) / n;
         for (let i = 0; i < n; i++) {
+          if (fit('Crate', x0 + i * w + 0.05, x0 + (i + 1) * w - 0.05, b, c.y1, d0, d1, { tint: i % 2 ? 0xffe0f0 : 0xffffff })) continue;
           box(i % 2 ? 0x6b4a6e : 0x4f4a78, x0 + i * w + 0.05, x0 + (i + 1) * w - 0.05, b, c.y1, d0, d1);
           glow(CYAN, x0 + i * w + 0.05, x0 + (i + 1) * w - 0.05, b + 0.45, b + 0.55, d0 - 0.03, d0);
         }
@@ -704,6 +741,7 @@ export function buildWorld(scene, renderer) {
         const n = Math.max(1, Math.round((x1 - x0) / 1.7)), w = (x1 - x0) / n;
         for (let i = 0; i < n; i++) {
           const cx = x0 + (i + 0.5) * w;
+          if (fit('SolarPanel', cx - w / 2 + 0.07, cx + w / 2 - 0.07, b, b + 1.05, d0 - 0.15, d1 + 0.15)) continue;
           boxR(0x16305c, w - 0.15, 0.08, d1 - d0 + 0.3, cx, b + 0.55, (d0 + d1) / 2, -0.5);
           boxR(CYAN, 0.03, 0.09, d1 - d0 + 0.3, cx, b + 0.56, (d0 + d1) / 2, -0.5, 0, 0, true);
           box(0x3a3d52, cx - 0.06, cx + 0.06, b, b + 0.85, d1 - 0.2, d1 - 0.08);
@@ -715,16 +753,18 @@ export function buildWorld(scene, renderer) {
         const cols = [0xd6342c, 0x3558c9, 0xd6342c];
         cols.forEach((col, i) => {
           const cx = x0 + 0.5 + i * ((x1 - x0 - 1) / 2), cd = (d0 + d1) / 2;
+          if (prop(i === 1 ? 'ChairBlue' : 'ChairRed', cx, b, cd, { sy: (c.y1 - b) / 0.9, ry: (i - 1) * 0.25 })) return;
           box(col, cx - 0.28, cx + 0.28, b + 0.42, b + 0.5, cd - 0.28, cd + 0.28);
           box(col, cx - 0.28, cx + 0.28, b + 0.5, c.y1, cd + 0.2, cd + 0.28);
           for (const [ox, od] of [[-0.24, -0.24], [0.24, -0.24], [-0.24, 0.24], [0.24, 0.24]]) box(col, cx + ox - 0.03, cx + ox + 0.03, b, b + 0.42, cd + od - 0.03, cd + od + 0.03);
         });
-        box(0xe9eef5, x0 + 0.95, x0 + 1.55, b, b + 0.4, d0 + 0.1, d0 + 0.5);                   // cooler
+        prop('Cooler', x0 + 1.25, b, d0 + 0.3) || box(0xe9eef5, x0 + 0.95, x0 + 1.55, b, b + 0.4, d0 + 0.1, d0 + 0.5);   // cooler
         glow(MAGENTA, x0, x1, c.y1, c.y1 + 0.04, d0 + 0.3, d0 + 0.4);
         break;
       }
       case 'shack': {
         const col = [0x2f8f86, 0xa5502f, 0x3566a8][Math.floor(d0) % 3];
+        if (fit('Shack', x0, x1, b, c.y1, d0, d1, { tint: [0xffffff, 0xffe2cc, 0xd8e6ff][Math.floor(d0) % 3] })) { glow(HAZARD, x0, x1, b, b + 0.08, d0 - 0.06, d0); break; }
         box(col, x0, x1, b, c.y1 - 0.15, d0, d1);
         for (let x = x0 + 0.4; x < x1; x += 0.4) box(0x1b1730, x - 0.02, x + 0.02, b, c.y1 - 0.15, d0 - 0.02, d0);
         boxR(0x565b78, x1 - x0 + 0.5, 0.1, d1 - d0 + 0.6, (x0 + x1) / 2, c.y1 - 0.05, (d0 + d1) / 2, 0.08);
@@ -840,6 +880,18 @@ export function buildWorld(scene, renderer) {
   const BRANDS = [['KUROMA', 'ELECTRONICS', '#ff5a36'], ['HANAZO', 'HEAVY INDUSTRY', '#39f0ff'], ['ORBITAL', 'FOODS', '#ffb347'], ['NEONKO', 'ARCADE', '#ff5fd2'],
     ['TETSUDO', 'RAIL', '#ff5a36'], ['VANTA', 'SECURITY', '#7de3ff'], ['MIRAI', 'PHARMA', '#7dffb0'], ['SORA', 'NOODLE', '#ff5a36'], ['KIBO', 'MOTORS', '#ffb347'], ['AKARI', 'OPTICS', '#39f0ff']];
   let brandN = 0, towerN = 0;
+  // Brands with a modelled neon sign (blender/build_city.py). [node, width, height, stands on its base]
+  const SIGN3D = { KUROMA: ['SignKuroma', 13.8, 8.5, true], NEONKO: ['SignArcade', 8.2, 3.0, false], VANTA: ['SignVanta', 9.16, 1.96, false],
+    MIRAI: ['SignPharma', 3.16, 3.16, false], SORA: ['SignNoodle', 1.9, 7.0, false], KIBO: ['SignMotors', 4.1, 8.38, true] };
+  // w = space available across the face, yc = centre height for wall signs, roofY = deck to stand on for framed ones
+  const brandSign = (name, sub, fg, w, cx, yc, d, roofY) => {
+    const m = SIGN3D[name];
+    if (m) {
+      const [node, mw, mh, stands] = m, sc = Math.min(w / mw, (w * 0.5) / mh) * (mw < 5 ? 1.25 : 1);
+      if (prop(node, cx, stands ? (roofY ?? yc - (mh * sc) / 2) : yc, stands && roofY !== undefined ? d + 1 : d, { file: 'signs', s: sc })) return;
+    }
+    sign(name, w, w * 0.34, cx, yc, d, 'back', { fg, sub, bare: true });
+  };
   const tower = (x0, x1, d0, d1, h, v) => {
     const n = towerN++, inward = (x0 + x1) / 2 < 0 ? x1 : x0, sx = (x0 + x1) / 2 < 0 ? 1 : -1;
     const h1 = h * (0.5 + R() * 0.2), in1 = 1.5 + R() * 3;
@@ -866,7 +918,7 @@ export function buildWorld(scene, renderer) {
     // corporate lettering on the face the runner approaches
     if (h1 > 34 && x1 - x0 > 14 && n % 3 === 1) {
       const [name, sub, fg] = BRANDS[brandN++ % BRANDS.length], w = Math.min(x1 - x0 - 2, 20);
-      sign(name, w, w * 0.34, cx, h1 * (0.55 + R() * 0.25), d0 - 0.2, 'back', { fg, sub, bare: true });
+      brandSign(name, sub, fg, w, cx, h1 * (0.55 + R() * 0.25), d0 - 0.2, h1 + 0.3);
     }
   };
   // Overhead megastructure: colossal concrete decks spanning the district, lit from below.
@@ -953,7 +1005,7 @@ export function buildWorld(scene, renderer) {
       for (const x of [x0, x1 - 0.8]) for (let d = d0; d < d1; d += 5) box(0x6a6070, x, x + 0.8, 0, hh, d, d + 0.8);
       const [name, sub, fg] = BRANDS[brandN++ % BRANDS.length], w = Math.min(x1 - x0, 18), cx = (x0 + x1) / 2;
       for (const x of [cx - w / 2 + 1, cx + w / 2 - 1]) box(0x101318, x - 0.15, x + 0.15, hh, hh + 4 + w * 0.34, d0 + 0.6, d0 + 0.9);
-      sign(name, w, w * 0.34, cx, hh + 3 + w * 0.17, d0 + 0.5, 'back', { fg, sub, bare: true });
+      brandSign(name, sub, fg, w, cx, hh + 3 + w * 0.17, d0 + 0.5);
     },
     // twin towers joined by sky bridges
     twin(x0, x1, d0, d1, h, face, sx, v) {
@@ -980,7 +1032,18 @@ export function buildWorld(scene, renderer) {
   const NEAR = ['housing', 'office', 'ziggurat', 'round', 'industrial', 'carpark', 'twin', 'hive', 'housing', 'office'];
   const FAR = ['office', 'twin', 'round', 'ziggurat', 'office', 'housing'];
   const lastType = { '-1n': '', '1n': '', '-1f': '', '1f': '' };
+  // Modelled landmark buildings (blender/build_city.py) stand where procedural blocks would have gone.
+  // [node, centre x, centre d, turn, scale, half-width x, half-depth d] - the turn points the detailed face at the route.
+  const HEROES = !assets?.has('buildings', 'MegaTower') ? [] : [
+    ['StackBlock', -54, 66, 1, 1, 14, 17], ['CapsuleTower', 57, 150, 0, 1, 16, 16], ['CorpSlab', -92, 196, 1, 1, 11, 42],
+    ['MegaTower', 104, 300, -1, 1, 27, 25], ['StackBlock', 55, 388, -1, 1.1, 15, 18], ['CapsuleTower', -58, 470, 0, 0.9, 15, 15],
+    ['MegaTower', -112, 560, 1, 0.9, 25, 23], ['CorpSlab', 92, 610, -1, 1, 11, 42], ['StackBlock', -55, 760, 1, 0.95, 14, 16],
+    ['CapsuleTower', 58, 860, 0, 1.05, 17, 17], ['MegaTower', 120, 1010, -1, 1.1, 30, 27], ['MegaTower', -130, 1120, 1, 1.25, 33, 31],
+  ];
+  for (const [node, x, d, turn, sc] of HEROES) prop(node, x, 0, d, { file: 'buildings', s: sc, ry: turn * Math.PI / 2, lod: Math.abs(x) > 80 });
+  const reserved = (x0, x1, d0, d1) => HEROES.some(([, x, d, , , hw, hd]) => x0 < x + hw && x1 > x - hw && d0 < d + hd && d1 > d - hd);
   const block = (row, sx, x0, x1, d0, d1, h) => {
+    if (reserved(x0, x1, d0, d1)) return;
     const list = row === 'n' ? NEAR : FAR, key = sx + row;
     let t = list[Math.floor(R() * list.length)];
     if (t === lastType[key]) t = list[(list.indexOf(t) + 1 + Math.floor(R() * 3)) % list.length];   // never the same type twice running
@@ -1021,7 +1084,9 @@ export function buildWorld(scene, renderer) {
   // megatowers on the horizon
   for (let i = 0; i < 16; i++) {
     const x = -330 + i * 44 + R() * 20, w = 26 + R() * 30, h = 150 + R() * 240;
-    const dd = 1330 + R() * 220; tower(x, x + w, dd, dd + 50 + R() * 40, h, i % 3);
+    const dd = 1330 + R() * 220;
+    if (i % 4 === 1 && prop('MegaTower', x + w / 2, 0, dd + 25, { file: 'buildings', s: h / 190, ry: i % 8 === 1 ? 0 : Math.PI / 2, lod: true })) continue;
+    tower(x, x + w, dd, dd + 50 + R() * 40, h, i % 3);
   }
   sign('GLASS DISTRICT', 46, 12, 96, 118, 960, 'back', { fg: '#39f0ff', sub: 'SECTOR 7', bare: true });
   
@@ -1031,34 +1096,41 @@ export function buildWorld(scene, renderer) {
   for (const x of [-34.5, -22.5, 27.5, 39]) glow(0x1f4a66, x - 0.1, x + 0.1, 0, 0.03, -130, 1150);
 
   // ---------------------------------------------------------------- rooftop dressing
+  lod(true);
   // Side terraces beside the run line carry the lived-in clutter: shacks, tanks, dishes,
   // antennas, plastic chairs, potted trees, solar panels, umbrellas.
   const SHEET = [0x9c4a5c, 0x5d7fa0, 0x8a6a5a, 0xa85a64, 0x6f8fae, 0x7a6a7a];
   const dish = (x, y, d, r = 0.7) => {
+    if (prop('SatDish', x, y, d, { s: r / 0.75, ry: (x * 7 + d * 3) % 6.28 })) return;
     box(0x2b2740, x - 0.05, x + 0.05, y, y + 1.1, d - 0.05, d + 0.05);
     addGeo(new THREE.CylinderGeometry(r, r * 0.25, 0.22, 10), 0xb9bfd0, x, y + 1.25, d, 0.9, R() * 6, 0);
   };
   const antenna = (x, y, d, h = 6) => {
+    if (prop('AntennaMast', x, y, d, { s: h / 6.1, ry: (x + d) % 6.28 })) return;
     box(0x15121f, x - 0.05, x + 0.05, y, y + h, d - 0.05, d + 0.05);
     for (let k = 0.45; k < 1; k += 0.18) box(0x15121f, x - 0.7 * (1.1 - k), x + 0.7 * (1.1 - k), y + h * k, y + h * k + 0.04, d - 0.03, d + 0.03);
     glow(HAZARD, x - 0.1, x + 0.1, y + h, y + h + 0.2, d - 0.1, d + 0.1);
   };
   const tank = (x, y, d) => {
+    if (prop('WaterTank', x, y, d, { s: 0.82, ry: (x * 3 + d) % 6.28 })) return;
     for (const [ox, od] of [[-0.7, -0.7], [0.7, -0.7], [-0.7, 0.7], [0.7, 0.7]]) box(0x211d33, x + ox - 0.07, x + ox + 0.07, y, y + 1.2, d + od - 0.07, d + od + 0.07);
     cyl(0x5a5378, 1.15, 2.2, x, y + 2.3, d, 'y', false, 10);
     addGeo(new THREE.ConeGeometry(1.25, 0.6, 10), 0x3a3458, x, y + 3.7, d);
   };
   const chair = (x, y, d, col) => {
+    if (prop(col === 0x3558c9 ? 'ChairBlue' : 'ChairRed', x, y, d, { ry: Math.PI + ((x * 5 + d) % 1.2) - 0.6 })) return;
     box(col, x - 0.25, x + 0.25, y + 0.4, y + 0.47, d - 0.25, d + 0.25);
     box(col, x - 0.25, x + 0.25, y + 0.47, y + 0.95, d - 0.25, d - 0.18);
     for (const [ox, od] of [[-0.2, -0.2], [0.2, -0.2], [-0.2, 0.2], [0.2, 0.2]]) box(col, x + ox - 0.03, x + ox + 0.03, y, y + 0.4, d + od - 0.03, d + od + 0.03);
   };
   const tree = (x, y, d) => {
+    if (prop('Bonsai', x, y, d, { s: 1.35, ry: (x * 2 + d * 5) % 6.28 })) return;
     cyl(0x6f7590, 0.32, 0.5, x, y + 0.25, d, 'y', false, 8);
     boxR(0x3b2a22, 0.1, 0.8, 0.1, x + 0.1, y + 0.85, d, 0, 0, -0.3);
     for (const [ox, oy, sz] of [[0.35, 1.25, 0.7], [-0.2, 1.05, 0.5], [0.1, 1.6, 0.45]]) boxR(0x2f7a52, sz, sz * 0.5, sz, x + ox, y + oy, d + (R() - 0.5) * 0.3, 0, R() * 3, 0);
   };
   const solar = (x, y, d) => {
+    if (prop('SolarPanel', x, y, d, { s: 1.35 })) return;
     boxR(0x16305c, 2.2, 0.08, 1.5, x, y + 0.6, d, -0.5);
     boxR(CYAN, 2.2, 0.085, 0.03, x, y + 0.6, d, -0.5, 0, 0, true);
     box(0x3a3d52, x - 0.05, x + 0.05, y, y + 0.9, d + 0.5, d + 0.6);
@@ -1070,6 +1142,11 @@ export function buildWorld(scene, renderer) {
   };
   const shack = (x, y, d, w, dp, face) => {
     const col = SHEET[Math.floor(R() * SHEET.length)], h = 2.3 + R() * 0.8;
+    const pale = (c) => new THREE.Color(c).lerp(new THREE.Color(0xffffff), 0.45).getHex();
+    if (fit('Shack', x - w / 2, x + w / 2, y, y + h + 0.3, d - dp / 2, d + dp / 2, { ry: face > 0 ? -Math.PI / 2 : Math.PI / 2, tint: pale(col) })) {
+      if (R() < 0.6) fit('ACUnit', x - 0.5, x + 0.5, y + h + 0.1, y + h + 0.7, d - 0.4, d + 0.4, { ry: face > 0 ? -Math.PI / 2 : Math.PI / 2 });
+      return;
+    }
     box(col, x - w / 2, x + w / 2, y, y + h, d - dp / 2, d + dp / 2);
     boxR(0x565b78, w + 0.5, 0.1, dp + 0.5, x, y + h + 0.08, d, 0, 0, face * 0.1);
     const xf = face > 0 ? x - w / 2 - 0.03 : x + w / 2;                                     // lit window toward the run line
@@ -1083,6 +1160,7 @@ export function buildWorld(scene, renderer) {
     const n = 2 + (R() < 0.4 ? 1 : 0);
     for (let i = 0; i < n; i++) {
       const w = 3 - i * 0.4, dp = 3.6 - i * 0.5, h = 2.3, ox = (R() - 0.5) * 0.6, col = SHEET[Math.floor(R() * SHEET.length)];
+      if (fit('Shack', x + ox - w / 2, x + ox + w / 2, yy, yy + h + 0.25, d - dp / 2, d + dp / 2, { ry: face > 0 ? -Math.PI / 2 : Math.PI / 2, tint: new THREE.Color(col).lerp(new THREE.Color(0xffffff), 0.45).getHex() })) { yy += h + 0.1; continue; }
       box(col, x + ox - w / 2, x + ox + w / 2, yy, yy + h, d - dp / 2, d + dp / 2);
       for (let k = -w / 2 + 0.35; k < w / 2; k += 0.35) box(0x12161b, x + ox + k - 0.02, x + ox + k + 0.02, yy, yy + h, d - dp / 2 - 0.02, d - dp / 2);
       box(0x565b78, x + ox - w / 2 - 0.3, x + ox + w / 2 + 0.3, yy + h, yy + h + 0.1, d - dp / 2 - 0.3, d + dp / 2 + 0.3);
@@ -1096,6 +1174,7 @@ export function buildWorld(scene, renderer) {
     boxR([0x2f6fb8, 0xb04a7a, 0x2f8f86][Math.floor(R() * 3)], 2.6, 0.05, 2.2, x, yy + 0.5, d, 0.2, 0, face * 0.15);   // tarp
     if (R() < 0.6) dish(x + 0.6, yy, d + 0.8, 0.55);
   };
+  let parked = 0;
   const terrace = (sx, half, top, d0, d1, w = 5.5) => {
     const off = MARGIN + 0.9, xa = sx > 0 ? half + off : -half - off - w, xb = xa + w, cx = (xa + xb) / 2;
     winBox(Math.floor(R() * 3), xa + 0.2, xb - 0.2, 0, top - 0.7, d0 + 0.6, d1 - 0.6);
@@ -1110,10 +1189,10 @@ export function buildWorld(scene, renderer) {
       else if (k === 1) tank(far, y, d);
       else if (k === 2) { dish(far, y, d); dish(near, y, d + 1.4, 0.5); }
       else if (k === 3) antenna(far, y, d, 5 + R() * 5);
-      else if (k === 4) { chair(near, y, d, 0xd6342c); chair(near + sx * 0.9, y, d + 0.7, 0x3558c9); box(0xe9eef5, near - 0.3, near + 0.3, y, y + 0.4, d + 1.2, d + 1.6); }
+      else if (k === 4) { chair(near, y, d, 0xd6342c); chair(near + sx * 0.9, y, d + 0.7, 0x3558c9); prop('Cooler', near, y, d + 1.4, { ry: 0.4 }) || box(0xe9eef5, near - 0.3, near + 0.3, y, y + 0.4, d + 1.2, d + 1.6); }
       else if (k === 5) { tree(near, y, d); tree(far, y, d + 1.6); }
       else if (k === 6) { solar(cx, y, d); solar(cx, y, d + 2); }
-      else if (k === 7) umbrella(cx, y, d);
+      else if (k === 7) { if (parked < 6 && d1 - d > 9 && prop('HoverCar', cx, y + 0.02, d + 1.5, { file: 'hovercar', ry: sx > 0 ? Math.PI + 0.12 : -0.12 })) { parked++; d += 3; prop('Barrel', cx - sx * 2.1, y, d - 4.2); } else umbrella(cx, y, d); }
       else stack(far, y, d, sx);
     }
     // sagging cables along the outer edge
@@ -1133,6 +1212,7 @@ export function buildWorld(scene, renderer) {
       let k = Math.floor(R() * 9); if (k === prev) k = (k + 1) % 9; prev = k;
       if (k === 0) {                                                  // pair of condensers on a pallet
         for (const od of [0, 2.1]) {
+          if (fit('ACUnit', cx - 0.55, cx + 0.55, y, y + 1.25, d + od, d + od + 1.8, { ry: sx > 0 ? -Math.PI / 2 : Math.PI / 2 })) continue;
           box(PALE, cx - 0.55, cx + 0.55, y + 0.1, y + 1.25, d + od, d + od + 1.8); box(0x6e6672, cx - 0.5, cx + 0.5, y, y + 0.1, d + od + 0.1, d + od + 1.7);
           for (const fd of [0.5, 1.3]) { cyl(0x3a3440, 0.33, 0.05, cx - sx * 0.56, y + 0.7, d + od + fd, 'x', false, 12); cyl(0xa9a2a6, 0.1, 0.07, cx - sx * 0.57, y + 0.7, d + od + fd, 'x', false, 8); }
         }
@@ -1180,7 +1260,8 @@ export function buildWorld(scene, renderer) {
       } else if (k === 7) {                                           // tin lean-to over stacked crates
         for (const [ox, od] of [[-0.6, 0.1], [0.6, 0.1], [-0.6, 3.1], [0.6, 3.1]]) box(0x6a5a52, cx + ox - 0.05, cx + ox + 0.05, y, y + 2.0 + (ox * sx > 0 ? 0.35 : 0), d + od - 0.05, d + od + 0.05);
         boxR(SHEETS[Math.floor(R() * 5)], 1.7, 0.06, 3.5, cx, y + 2.22, d + 1.6, 0, 0, sx * 0.28);
-        box(0x8a6a52, cx - 0.4, cx + 0.4, y, y + 0.7, d + 0.5, d + 1.3); box(0x74584a, cx - 0.35, cx + 0.35, y + 0.7, y + 1.3, d + 0.55, d + 1.2); box(0x5d7fa0, cx - 0.4, cx + 0.4, y, y + 0.6, d + 1.6, d + 2.5);
+        if (fit('Crate', cx - 0.4, cx + 0.4, y, y + 0.7, d + 0.5, d + 1.3)) { fit('Crate', cx - 0.35, cx + 0.35, y + 0.7, y + 1.3, d + 0.55, d + 1.2, { tint: 0xffe0c8 }); prop('Barrel', cx, y, d + 2.05, { s: 0.85 }); }
+        else { box(0x8a6a52, cx - 0.4, cx + 0.4, y, y + 0.7, d + 0.5, d + 1.3); box(0x74584a, cx - 0.35, cx + 0.35, y + 0.7, y + 1.3, d + 0.55, d + 1.2); box(0x5d7fa0, cx - 0.4, cx + 0.4, y, y + 0.6, d + 1.6, d + 2.5); }
         d += 4.6;
       } else {                                                        // pipes climbing over the parapet
         for (const od of [0, 0.35, 0.7]) { cyl(0xa08a7c, 0.09, 1.1 + od, xout - sx * (0.55 + od / 2), y + 0.12 + od * 0.25, d + od, 'x'); cyl(0xa08a7c, 0.09, 0.9, xout - sx * 0.05, y + 0.55, d + od, 'y'); }
@@ -1222,6 +1303,7 @@ export function buildWorld(scene, renderer) {
   }
 
   B.build();
+  track();
 
   // ---------------------------------------------------------------- traffic (far below)
   const lanes = [];
@@ -1236,15 +1318,14 @@ export function buildWorld(scene, renderer) {
   lane('d', -17, 1, -130, 1250, 7, 44, 64); lane('d', 21, -1, -130, 1250, 7, 50, 78); lane('d', -52, -1, -130, 1250, 6, 38, 104); lane('d', 58, 1, -130, 1250, 6, 42, 92);
   lane('x', 310, 1, -260, 260, 6, 40, 70); lane('x', 540, -1, -260, 260, 6, 46, 58); lane('x', 800, 1, -260, 260, 6, 40, 52); lane('x', 120, -1, -260, 260, 5, 44, 88);
   lane('d', 5.4, 1, 690, 1250, 9, 15); lane('d', -5.4, -1, 690, 1250, 9, 17);
-  const traffic = new THREE.InstancedMesh(new THREE.BoxGeometry(1.7, 0.7, 3.8), new THREE.MeshBasicMaterial(), lanes.length);
-  traffic.frustumCulled = false;
-  const tail = new THREE.Color(0xff2b3b), headl = new THREE.Color(0xfff3c9), side = new THREE.Color(0xffa63d);
-  lanes.forEach((l, i) => traffic.setColorAt(i, l.axis === 'x' ? side : l.dir > 0 ? tail : headl));
-  scene.add(traffic);
+  for (const l of lanes) l.hero = l.y > 1 && l.axis === 'd' && Math.abs(l.pos) < 25;       // the two sky lanes nearest the route get the detailed hover car
+  const traffic = makeTraffic(scene, assets, lanes, { rand: R, boxColor: (l) => (l.axis === 'x' ? 0xffa63d : l.dir > 0 ? 0xff2b3b : 0xfff3c9) });
 
   // ---------------------------------------------------------------- getaway van
   const van = new THREE.Group();
-  {
+  const vanModel = assets?.mesh('getaway_van', 'Van', { shadow: true });     // blender/build_vehicles.py; rear opening at z = 0, nose toward -z
+  if (vanModel) van.add(vanModel);
+  else {
     const vm = (c, g = 0.1) => new THREE.MeshLambertMaterial({ color: c, emissive: c, emissiveIntensity: g, flatShading: true });
     const gm = (c) => new THREE.MeshBasicMaterial({ color: c });
     const vb = (m, w, h, dp, x, y, z) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, dp), m); b.position.set(x, y, z); van.add(b); return b; };
@@ -1271,6 +1352,8 @@ export function buildWorld(scene, renderer) {
       }
     }
     for (let i = 0; i < 5; i++) vb(vm(0x35ff6b, 0.7), 0.5, 0.22, 0.3, -0.6 + (i % 3) * 0.6, 0.86, -3.4 - Math.floor(i / 3) * 0.5);
+  }
+  {
     const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 150, 8, 1, true),
       new THREE.MeshBasicMaterial({ color: 0x35ff6b, transparent: true, opacity: 0.4, fog: false, depthWrite: false, side: THREE.DoubleSide }));
     beam.position.set(0, 78, -2.4); van.add(beam); van.userData.beam = beam;
@@ -1304,7 +1387,6 @@ export function buildWorld(scene, renderer) {
     pm.dispose();
   }
 
-  const m4 = new THREE.Matrix4();
   return {
     glassPane, van, train, crossTrain, sun: key,
     // low quality swaps the physically based materials for cheap ones
@@ -1322,14 +1404,7 @@ export function buildWorld(scene, renderer) {
       alarmMat.color.setHex(Math.floor(time * 3) % 2 ? 0xff2030 : 0x4a0a10);
       train.position.z = -(((time * 26) % 1150) - 190);
       crossTrain.position.x = playerD > 520 ? -160 + ((time * 34) % 420) : -400;
-      lanes.forEach((l, i) => {
-        const span = l.b - l.a;
-        let p = (l.off + time * l.speed) % span; if (l.dir < 0) p = span - p;
-        if (l.axis === 'd') m4.makeTranslation(l.pos, l.y, -(l.a + p));
-        else { m4.makeRotationY(Math.PI / 2); m4.setPosition(l.a + p, l.y, -l.pos); }
-        traffic.setMatrixAt(i, m4);
-      });
-      traffic.instanceMatrix.needsUpdate = true;
+      traffic.update(time);
       van.userData.beam.material.opacity = 0.3 + 0.12 * Math.sin(time * 4);
       van.userData.tag.position.y = 12 + Math.sin(time * 3) * 0.5;
     },

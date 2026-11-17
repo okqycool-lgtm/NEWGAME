@@ -2,7 +2,8 @@
 // a conveyor, a moored freighter, gantry cranes, rain and sodium light over black water.
 import * as THREE from 'three';
 import { colliders, walls, LANDING_PAD, VAN } from './level.js';
-import { ACCENT, rng, Batch, windowTexture, roofTexture, puddleTexture, lampTexture, signMesh, billboardTexture } from './world.js';
+import { ACCENT, rng, Batch, windowTexture, roofTexture, puddleTexture, lampTexture, signMesh, billboardTexture, propPlacer } from './world.js';
+import { makeTraffic } from './traffic.js';
 
 const TEAL = 0x39ffd0, AMBER = 0xff9a3d, HAZARD = 0xff3b30, CYAN = 0x39f0ff, MAGENTA = 0xff3df0;
 const CONT = [0x9a3b2e, 0x2f5f9a, 0x2f7a5a, 0xc46a28, 0x8a9098, 0x2a8a8a, 0x6a2a3a, 0x4a5a8a, 0xa8a090];
@@ -38,8 +39,9 @@ function harborSky() {
   return t;
 }
 
-export function buildHarbor(scene, renderer) {
+export function buildHarbor(scene, renderer, assets) {
   const R = rng(9142), B = new Batch(scene);
+  const { prop, fit, track } = propPlacer(B, assets);
   scene.fog.color.set(0x0c2428); scene.fog.near = 45; scene.fog.far = 700; scene.background.set(0x05100f);
 
   const lamMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
@@ -336,6 +338,7 @@ export function buildHarbor(scene, renderer) {
         const n = Math.max(1, Math.round((x1 - x0) / 1.5)), w = (x1 - x0) / n;
         for (let i = 0; i < n; i++) {
           const xa = x0 + i * w + 0.05, xb = x0 + (i + 1) * w - 0.05;
+          if (fit('Crate', xa, xb, b, c.y1, d0, d1, { tint: i % 2 ? 0xffe6c8 : 0xffffff })) continue;
           box(i % 2 ? 0x8a6a4a : 0x7a5c40, xa, xb, b, c.y1, d0, d1);
           box(0x4a3828, xa, xb, b + 0.44, b + 0.56, d0 - 0.03, d0); box(0x4a3828, (xa + xb) / 2 - 0.05, (xa + xb) / 2 + 0.05, b, c.y1, d0 - 0.03, d0);
         }
@@ -344,6 +347,7 @@ export function buildHarbor(scene, renderer) {
       }
       case 'drum': {
         for (let x = x0 + 0.45; x < x1; x += 0.95) {
+          if (fit('Barrel', x - 0.42, x + 0.42, b, c.y1, (d0 + d1) / 2 - 0.42, (d0 + d1) / 2 + 0.42, { tint: [0xffffff, 0xffc8b8, 0xc8ffd8][Math.abs(Math.floor(x * 3)) % 3] })) continue;
           cyl([0x2f5f9a, 0x9a3b2e, 0x2f7a5a][Math.floor(x * 3) % 3 < 0 ? 0 : Math.abs(Math.floor(x * 3)) % 3], 0.42, c.y1 - b, x, (b + c.y1) / 2, (d0 + d1) / 2, 'y', false, 10);
           cyl(YEL, 0.44, 0.12, x, b + 0.7, (d0 + d1) / 2, 'y', false, 10);
         }
@@ -439,23 +443,24 @@ export function buildHarbor(scene, renderer) {
   }
 
   B.build();
+  track();
 
   // ---------------------------------------------------------------- moving lights: boats and flying freight
   const lanes = [];
   const lane = (axis, pos, dir, a, b, n, speed, y) => { for (let i = 0; i < n; i++) lanes.push({ axis, pos, dir, a, b, speed: speed * (0.8 + R() * 0.4), off: R() * (b - a), y }); };
   lane('d', -112, 1, -200, 1300, 5, 9, 0.3); lane('d', 118, -1, -200, 1300, 5, 8, 0.3); lane('x', 880, 1, -300, 300, 4, 7, 0.3); lane('x', -90, -1, -300, 300, 3, 6, 0.3);
   lane('d', -60, 1, -200, 1300, 6, 40, 86); lane('d', 70, -1, -200, 1300, 6, 46, 98); lane('x', 420, 1, -300, 300, 5, 40, 80); lane('x', 700, -1, -300, 300, 5, 44, 90);
-  const traffic = new THREE.InstancedMesh(new THREE.BoxGeometry(1.8, 0.7, 4.4), new THREE.MeshBasicMaterial(), lanes.length);
-  traffic.frustumCulled = false;
-  const cA = new THREE.Color(0xff2b3b), cB = new THREE.Color(0xfff3c9), cC = new THREE.Color(0x39ffd0);
-  lanes.forEach((l, i) => traffic.setColorAt(i, l.y < 1 ? cC : l.dir > 0 ? cA : cB));
-  scene.add(traffic);
+  for (const l of lanes) { l.box = l.y < 1; l.hero = l.axis === 'd'; }                       // boats stay as running lights; sky freight becomes hover cars
+  const traffic = makeTraffic(scene, assets, lanes, { boxSize: [1.8, 0.7, 4.4], rand: R, boxColor: (l) => (l.y < 1 ? 0x39ffd0 : l.dir > 0 ? 0xff2b3b : 0xfff3c9) });
 
   // ---------------------------------------------------------------- getaway skiff (hover)
   const van = new THREE.Group();
+  const skiffModel = assets?.mesh('getaway_skiff', 'Skiff', { shadow: true });   // blender/build_vehicles.py
+  if (skiffModel) van.add(skiffModel);
   {
+    const box0 = !skiffModel;
     const vm = (c, g = 0.12) => new THREE.MeshLambertMaterial({ color: c, emissive: c, emissiveIntensity: g, flatShading: true }), gm = (c) => new THREE.MeshBasicMaterial({ color: c });
-    const vb = (m, w, h, dp, x, y, z, rx = 0) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, dp), m); b.position.set(x, y, z); b.rotation.x = rx; van.add(b); return b; };
+    const vb = (m, w, h, dp, x, y, z, rx = 0) => { if (!box0) return null; const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, dp), m); b.position.set(x, y, z); b.rotation.x = rx; van.add(b); return b; };
     const hull = vm(0x1f3038, 0.25);
     vb(hull, 2.5, 0.25, 4.6, 0, 0.62, -2.3);                                         // open cargo bed
     vb(hull, 0.14, 0.7, 4.6, -1.2, 1.05, -2.3); vb(hull, 0.14, 0.7, 4.6, 1.2, 1.05, -2.3);
@@ -465,7 +470,7 @@ export function buildHarbor(scene, renderer) {
     vb(gm(ACCENT), 2.5, 0.1, 0.14, 0, 0.78, -0.05);                                   // the ledge to hit
     vb(gm(0xff7a1c), 0.04, 0.3, 4.6, -1.28, 1.1, -2.3); vb(gm(0xff7a1c), 0.04, 0.3, 4.6, 1.28, 1.1, -2.3);
     for (const [x, z] of [[-1, -0.9], [1, -0.9], [-1, -4.6], [1, -4.6]]) {            // lift thrusters
-      const t = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.6, 0.35, 10), vm(0x0c1114, 0)); t.position.set(x, 0.42, z); van.add(t);
+      if (box0) { const t = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.6, 0.35, 10), vm(0x0c1114, 0)); t.position.set(x, 0.42, z); van.add(t); }
       const j = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.15, 0.4, 10, 1, true), new THREE.MeshBasicMaterial({ color: 0x39f0ff, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
       j.position.set(x, 0.1, z); van.add(j);
     }
@@ -499,7 +504,6 @@ export function buildHarbor(scene, renderer) {
     scene.environment = pm.fromScene(env, 0.03).texture; scene.environmentIntensity = 0.7; pm.dispose();
   }
 
-  const m4 = new THREE.Matrix4();
   return {
     glassPane, van, sun: key,
     setQuality(level) {
@@ -516,14 +520,7 @@ export function buildHarbor(scene, renderer) {
       alarmMat.color.setHex(Math.floor(time * 3) % 2 ? 0xff2030 : 0x4a0a10);
       const on = Math.floor(time * 1.2) % 2 === 0;
       craneLights.forEach((m, i) => { m.visible = i % 2 ? on : !on; });
-      lanes.forEach((l, i) => {
-        const span = l.b - l.a;
-        let p = (l.off + time * l.speed) % span; if (l.dir < 0) p = span - p;
-        if (l.axis === 'd') m4.makeTranslation(l.pos, l.y, -(l.a + p));
-        else { m4.makeRotationY(Math.PI / 2); m4.setPosition(l.a + p, l.y, -l.pos); }
-        traffic.setMatrixAt(i, m4);
-      });
-      traffic.instanceMatrix.needsUpdate = true;
+      traffic.update(time);
       van.position.y = 0.12 + Math.sin(time * 3.2) * 0.05;                    // hovering
       van.userData.beam.material.opacity = 0.3 + 0.12 * Math.sin(time * 4);
       van.userData.tag.position.y = 12 + Math.sin(time * 3) * 0.5;

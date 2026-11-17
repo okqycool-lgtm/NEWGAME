@@ -1,5 +1,6 @@
-// The runner: an original low-poly character built from boxes on a small joint rig,
-// animated procedurally from the controller state.
+// The runner: a modelled character (blender/build_runner.py -> public/assets/runner.glb) whose rigid
+// parts hang on a small joint rig, animated procedurally from the controller state. If the model
+// isn't available the original box figure is built on the same rig instead.
 import * as THREE from 'three';
 
 const C = {
@@ -17,12 +18,13 @@ const mat = (c, glow = 0) => {
   }
   return mats[k];
 };
-function box(parent, w, h, d, color, x = 0, y = 0, z = 0, glow = 0.12) {
+function boxPart(parent, w, h, d, color, x = 0, y = 0, z = 0, glow = 0.12) {
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(color, glow));
   m.position.set(x, y, z);
   parent.add(m);
   return m;
 }
+const NONE = new THREE.Object3D();    // stand-in returned for box parts the model replaces
 const pivot = (parent, x, y, z) => { const g = new THREE.Group(); g.position.set(x, y, z); parent.add(g); return g; };
 
 const POSE_KEYS = ['bodyY', 'pitch', 'roll', 'yaw', 'torso', 'twist', 'head',
@@ -31,22 +33,27 @@ const POSE_KEYS = ['bodyY', 'pitch', 'roll', 'yaw', 'torso', 'twist', 'head',
 export const HIP = 0.8;   // hip height of the blocky rig
 
 export class Runner {
-  constructor() {
-    // Chunky toy-block proportions: big cube head, slab torso, thick short limbs.
+  constructor(assets) {
+    const glb = assets?.has('runner', 'Torso') ? assets : null;
+    const part = (parent, name) => { const m = glb.mesh('runner', name, { shadow: true }); if (m) parent.add(m); };
+    const box = glb ? () => NONE : boxPart;
     const root = this.root = new THREE.Group();
     const model = this.model = new THREE.Group();
     model.scale.setScalar(1.16);
     root.add(model);
     const body = this.body = pivot(model, 0, HIP, 0);
+    if (glb) part(body, 'Pelvis');
     box(body, 0.5, 0.16, 0.28, C.pants, 0, 0.02, 0);
     box(body, 0.52, 0.05, 0.3, C.cyan, 0, 0.11, 0, 0.7);            // belt
 
     // legs
     const leg = (sx) => {
       const hip = pivot(body, sx * 0.125, -0.03, 0);
+      const side = sx < 0 ? 'L' : 'R';
       box(hip, 0.23, 0.4, 0.25, C.pants, 0, -0.19, 0);
       box(hip, 0.07, 0.16, 0.18, C.pocket, sx * 0.14, -0.22, 0);     // cargo pocket
       const knee = pivot(hip, 0, -0.38, 0);
+      if (glb) { part(hip, 'Thigh' + side); part(knee, 'Shin' + side); }
       box(knee, 0.22, 0.34, 0.24, C.pants, 0, -0.16, 0);
       box(knee, 0.24, 0.12, 0.36, C.boot, 0, -0.36, -0.05);
       box(knee, 0.1, 0.13, 0.08, C.chrome, 0, -0.33, 0.16, 0.35);    // spring heel
@@ -61,6 +68,7 @@ export class Runner {
 
     // torso
     const torso = this.torso = pivot(body, 0, 0.1, 0);
+    if (glb) part(torso, 'Torso');
     box(torso, 0.5, 0.22, 0.28, C.shirt, 0, 0.1, 0);
     box(torso, 0.56, 0.32, 0.33, C.jacket, 0, 0.36, 0, 0.3);         // cropped jacket
     box(torso, 0.57, 0.05, 0.34, C.jacketDark, 0, 0.205, 0, 0.2);    // hem
@@ -68,6 +76,7 @@ export class Runner {
 
     // head — a big rounded-off cube
     const head = this.head = pivot(torso, 0, 0.53, 0);
+    if (glb) part(head, 'Head');
     box(head, 0.4, 0.36, 0.36, C.skin, 0, 0.19, 0);
     box(head, 0.42, 0.09, 0.06, C.cyan, 0, 0.23, -0.17, 0.9);        // visor
     box(head, 0.44, 0.12, 0.4, C.hair, 0, 0.4, 0.01);
@@ -84,6 +93,7 @@ export class Runner {
     // backpack — crooked, overstuffed
     const pack = this.pack = pivot(torso, 0.04, 0.3, 0.29);
     pack.rotation.set(0.08, 0.1, 0.22);
+    if (glb) part(pack, 'Pack');
     box(pack, 0.48, 0.48, 0.26, C.pack, 0, 0, 0, 0.05);
     box(pack, 0.36, 0.18, 0.07, C.strap, 0, -0.09, 0.15, 0.05);
     box(pack, 0.5, 0.07, 0.12, C.strap, 0, 0.22, -0.11, 0.05);        // half-open flap
@@ -100,6 +110,7 @@ export class Runner {
       const sh = pivot(torso, sx * 0.375, 0.47, 0);
       box(sh, 0.19, 0.28, 0.21, C.jacket, 0, -0.12, 0, 0.3);
       const el = pivot(sh, 0, -0.26, 0);
+      if (glb) { part(sh, 'UpperArm' + (sx < 0 ? 'L' : 'R')); part(el, 'Forearm' + (sx < 0 ? 'L' : 'R')); }
       box(el, 0.17, 0.24, 0.19, chrome ? C.chrome : C.skin, 0, -0.11, 0, chrome ? 0.4 : 0.12);
       if (chrome) box(el, 0.18, 0.035, 0.2, C.cyan, 0, -0.07, 0, 1);
       box(el, 0.19, 0.12, 0.21, chrome ? C.chrome : C.boot, 0, -0.28, 0, chrome ? 0.4 : 0.05);
@@ -107,7 +118,7 @@ export class Runner {
     };
     this.armL = arm(-1, true); this.armR = arm(1, false);
 
-    root.traverse((o) => { if (o.isMesh && o.material.isMeshStandardMaterial) o.castShadow = true; });
+    if (!glb) root.traverse((o) => { if (o.isMesh && o.material.isMeshStandardMaterial) o.castShadow = true; });
     this.pose = {}; for (const k of POSE_KEYS) this.pose[k] = 0;
     this.tgt = { ...this.pose };
     this.spin = 0;

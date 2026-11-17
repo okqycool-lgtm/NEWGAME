@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Stand-in for the `blender` executable where only the PyPI `bpy` module is installed
+# (cloud sandboxes without access to download.blender.org). Supports the flags the
+# blender-skills scripts use:  blender -b [file.blend] [--factory-startup]
+#   [--python-exit-code N] (-P script.py | --python-expr CODE) [-- args...]
+# Set BLENDER_PY to the python that has bpy (default: tools/.venv/bin/python).
+HERE="$(cd "$(dirname "$0")" && pwd)"
+PY="${BLENDER_PY:-$HERE/.venv/bin/python}"
+exec "$PY" "$HERE/blender_shim.py" "$@"

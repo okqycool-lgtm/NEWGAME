@@ -7,8 +7,10 @@ title screen: **Glass District** (neon rooftops with fan launchers, zip lines an
 wall-to-wall chain, about a minute) and **Iron Harbor**
 (a rain-soaked container port across the bay, about 65 seconds).
 
-Built with Three.js + Vite. All art, text and sound are generated at runtime — no
-asset downloads, no accounts, nothing to install for players.
+Built with Three.js + Vite. The character, vehicles, landmark buildings, neon signs and rooftop
+props are modelled in Blender (scripts in `blender/`, output in `public/assets/*.glb`, about 5.5 MB);
+textures, text and sound are generated at runtime. If a model fails to load the game falls back to
+its original procedural boxes. No accounts, nothing to install for players.
 
 ## Run
 
@@ -51,7 +53,28 @@ npm run dev      # prints a local URL and a network URL (open that on a phone / 
 - `src/main.js` — game loop, camera, HUD, cash rules
 - `src/gfx.js` — post-processing, rain, and the automatic quality ladder
 - `src/cop.js` — the robot officer
+- `src/assets.js` — loads the GLB models, one palette material per file, follows the quality level
+- `src/traffic.js` — instanced cars and hover cars on the traffic lanes
 - `src/fx.js`, `src/audio.js`, `src/input.js` — particles, synthesised sound, keyboard/touch
+
+## Art pipeline (Blender)
+
+Models are built by Python scripts, not hand-saved `.blend` files, so they can be regenerated:
+
+```bash
+uv venv -p 3.13 tools/.venv && uv pip install -p tools/.venv/bin/python bpy==5.3.0 numpy pillow
+tools/.venv/bin/python blender/build_runner.py      # runner.glb (rigid parts on the game's joint pivots)
+tools/.venv/bin/python blender/build_vehicles.py    # getaway_van, getaway_skiff, traffic, hovercar
+tools/.venv/bin/python blender/build_city.py        # buildings, signs
+tools/.venv/bin/python blender/build_props.py       # props
+```
+
+- `blender/lib.py` holds the shared helpers: primitives and lofts, bevel + weighted normals, Cycles AO
+  baked to vertex colours, a palette atlas that collapses each file to one material, LODs, QA, export
+  and preview renders. It drives the agent skills in `blender-skills/` (export, QA, LOD scripts).
+- `tools/blender` is a stand-in for the `blender` command on machines that only have the `bpy` wheel;
+  point `BLENDER_EXE` at it to run the skill scripts directly.
+- Set `PREVIEW_DIR` to choose where preview renders go (default `blender/preview/`).
 
 ## Tests
 

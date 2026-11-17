@@ -8,6 +8,7 @@ import { Sfx } from './audio.js';
 import { Input } from './input.js';
 import { Cop } from './cop.js';
 import { Gfx } from './gfx.js';
+import { Assets } from './assets.js';
 import * as L from './level.js';
 
 const $ = (id) => document.getElementById(id);
@@ -23,13 +24,14 @@ scene.background = new THREE.Color(0x0a0820);
 scene.fog = new THREE.Fog(0x1c1244, 70, 1000);
 const camera = new THREE.PerspectiveCamera(62, 1, 0.1, 3200);
 // ---------------------------------------------------------------- objects
-const world = buildWorld(scene, renderer);
-const gfx = new Gfx(renderer, scene, camera, (level) => world.setQuality(level));
+const assets = await new Assets().load();            // Blender-built models; the world falls back to boxes without them
+const world = buildWorld(scene, renderer, assets);
+const gfx = new Gfx(renderer, scene, camera, (level) => { assets.setQuality(level); world.setQuality(level); });
 $('gfxbtn').textContent = 'GFX\n' + gfx.label;
 gfx.rainOn = L.LEVEL === 2;
 addEventListener('resize', () => gfx.resize());
 const player = new Player();
-const runner = new Runner();
+const runner = new Runner(assets);
 scene.add(runner.root);
 const fx = new Fx(scene);
 const sfx = new Sfx();
